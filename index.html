@@ -15,7 +15,8 @@
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
     font-family:var(--mono);-webkit-font-smoothing:antialiased}
   #map{position:absolute;inset:0}
-  #konfetti{position:absolute;inset:0;width:100%;height:100%;z-index:20;
+  /* Konfettin ligger över kartan men under allt man ska läsa. */
+  #konfetti{position:absolute;inset:0;width:100%;height:100%;z-index:4;
     pointer-events:none;display:block}
   .maplibregl-ctrl-attrib{font-family:var(--mono);font-size:10px}
 
@@ -82,46 +83,100 @@
   #centroid{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
     background:var(--hot);box-shadow:0 0 18px var(--hot);opacity:0;transition:opacity .25s}
 
-  /* ---- domen ---- */
-  #verdict{position:absolute;top:92px;left:40px;z-index:6;
-    width:462px;max-height:calc(100vh - 280px);overflow:auto;padding:22px 24px;
-    background:rgba(10,12,16,.93);border:1px solid var(--line);border-left:3px solid var(--accent);
-    border-radius:4px;backdrop-filter:blur(16px);
-    opacity:0;pointer-events:none;transition:opacity .4s}
+  /* ---- domen ----
+     Två paneler i skärmens kanter, kartan och tangentbordet i mitten. Domen
+     läses på avstånd under en demo, så allt är satt i skrivbordsstorlek. */
+  #verdict{position:absolute;inset:0;z-index:6;pointer-events:none;
+    opacity:0;transition:opacity .4s}
   #verdict.on{opacity:1}
-  #verdict h1{margin:0 0 3px;font-size:24px;letter-spacing:.04em}
-  #verdict .sub{color:var(--dim);font-size:11px;margin-bottom:14px;font-variant-numeric:tabular-nums}
-  #verdict .plats{font-size:17px;margin-bottom:2px}
-  #verdict .precision{font-size:10px;color:var(--dim);margin:9px 0 14px;
-    padding-bottom:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  .panel{position:absolute;top:84px;bottom:24px;overflow:hidden;padding:26px 28px;
+    background:rgba(10,12,16,.93);border:1px solid var(--line);border-radius:6px;
+    backdrop-filter:blur(16px)}
+  /* Vänsterpanelen sluter sig kring innehållet; högerpanelen tar hela höjden. */
+  #lage{left:24px;bottom:auto;max-height:calc(100vh - 108px);width:clamp(340px, 29vw, 420px);border-left:3px solid var(--accent)}
+  #vetande{right:24px;width:clamp(340px, 30vw, 440px)}
 
-  #kort{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-  .kort{background:rgba(255,255,255,.028);border:1px solid var(--line);border-radius:4px;
-    padding:10px 12px 11px;min-height:66px}
-  .kort .etikett{font-size:8.5px;letter-spacing:.17em;text-transform:uppercase;
-    color:#5d6878;margin-bottom:7px}
-  .kort .varde{font-size:13px;line-height:1.35;color:var(--fg)}
-  .kort .under{font-size:10px;line-height:1.5;color:var(--dim);margin-top:4px}
-  .kort.bred{grid-column:1 / -1}
-  #foto .etikett{font-size:8.5px;letter-spacing:.17em;text-transform:uppercase;
-    color:#5d6878;margin-bottom:8px;text-shadow:0 0 10px var(--bg)}
-  #verdict .foot{margin-top:14px;font-size:9.5px;color:#4a5564;line-height:1.55}
+  .etikett{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#7b8794}
 
-  /* Bilden är det enda på skärmen som gör platsen till en plats i stället för
-     en tabellrad, så den får ta ordentligt med utrymme. */
-  #foto{position:absolute;top:92px;right:40px;z-index:6;
-    width:min(430px, calc(100vw - 580px));
-    opacity:0;pointer-events:none;transition:opacity .5s}
-  @media (max-width:760px){ #foto{display:none} }
-  #foto.on{opacity:1}
-  #foto-ram{position:relative;width:100%;aspect-ratio:4/3;border-radius:4px;overflow:hidden;
-    background:rgba(10,12,16,.93);border:1px solid var(--line);
-    display:grid;place-items:center}
-  #foto-ram img{width:100%;height:100%;object-fit:cover;display:block}
-  #foto-vantar{font-size:11px;color:var(--dim);letter-spacing:.08em;padding:20px;text-align:center}
-  #foto-text{margin-top:10px;font-size:10px;color:var(--dim);line-height:1.65;
-    text-shadow:0 0 10px var(--bg)}
-  #foto-text b{color:var(--fg);font-weight:400}
+  #lage h1{margin:0 0 10px;font-size:15px;font-weight:400;letter-spacing:.28em;color:var(--accent)}
+  #v-plats{font-size:34px;line-height:1.15;letter-spacing:.01em}
+  #v-land{font-size:19px;margin-top:8px;color:var(--fg)}
+  #v-coords{font-size:15px;margin-top:6px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  /* Väder och vind delar rad, tiden får en egen och står störst av allt. */
+  .rad{border-top:1px solid var(--line);padding:16px 0}
+  #vader-rad{display:grid;grid-template-columns:1fr 1fr;margin-top:22px}
+  #vader-rad > div + div{border-left:1px solid var(--line);padding-left:18px}
+  .tal{font-size:clamp(26px, 2.3vw, 34px);line-height:1.1;margin:8px 0 4px;white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  .under{font-size:14px;color:var(--dim)}
+  #k-beats{display:block;font-size:60px;line-height:1;margin:10px 0 6px;letter-spacing:.02em;
+    font-variant-numeric:tabular-nums}
+
+  /* Radion är det enda som pågår, så den får ett eget kort och en egen tangent. */
+  #radio-rad{margin-top:6px;padding:16px 18px;border:1px solid var(--line);border-radius:6px;
+    background:rgba(255,255,255,.035)}
+  #radio-rad.spelar{border-color:rgba(74,222,128,.45)}
+  #radio-rad .station{display:grid;grid-template-columns:30px minmax(0,1fr);gap:14px;
+    align-items:center;margin-top:12px}
+  .eq{display:flex;align-items:flex-end;gap:3px;height:26px}
+  .eq i{flex:1;height:4px;background:var(--dim);border-radius:1px}
+  #radio-rad.spelar .eq i{background:var(--accent);animation:eq .9s ease-in-out infinite alternate}
+  #radio-rad.spelar .eq i:nth-child(2){animation-duration:.62s}
+  #radio-rad.spelar .eq i:nth-child(3){animation-duration:.78s}
+  #radio-rad.spelar .eq i:nth-child(4){animation-duration:.54s}
+  @keyframes eq{from{height:4px}to{height:26px}}
+  #k-radio{font-size:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #k-radio-d{font-size:14px;color:var(--dim);margin-top:4px}
+  #k-radio-tangent{display:none;align-items:center;gap:10px;margin-top:14px;padding-top:12px;
+    border-top:1px solid var(--line);font-size:14px;color:var(--fg)}
+  #radio-rad.spelar #k-radio-tangent, #radio-rad.pausad #k-radio-tangent{display:flex}
+  kbd{font-family:var(--mono);font-size:13px;min-width:28px;padding:4px 7px;text-align:center;
+    border:1px solid #3d4756;border-bottom-width:3px;border-radius:5px;color:var(--fg)}
+
+  /* Onödigt vetande. Varje stycke realia har sin rubrik ovanför kortet. */
+  #vetande h2{margin:0 0 18px;font-size:24px;font-weight:400;letter-spacing:.01em;color:var(--fg)}
+  .stycke + .stycke{margin-top:18px}
+  .stycke .rubrik{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    margin-bottom:8px;font-size:16px;color:var(--fg)}
+  .stycke .avst{font-size:13px;color:var(--dim);white-space:nowrap}
+  .realia{display:grid;grid-template-columns:var(--bild) minmax(0,1fr);gap:16px;padding:14px;
+    --bild:clamp(112px, 10vw, 144px);
+    background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:6px}
+  .realia .bild{width:var(--bild);height:var(--bild);border-radius:4px;overflow:hidden;
+    background:rgba(255,255,255,.05);display:grid;place-items:center;
+    font-size:12px;color:#5d6878;text-align:center;padding:6px}
+  .realia .bild:has(img){padding:0}
+  .realia .bild img{width:100%;height:100%;object-fit:cover;display:block}
+  .realia .titel{font-size:18px;line-height:1.25;overflow:hidden;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .realia .bi{font-size:13px;color:var(--dim);margin-top:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .realia .bi.kursiv{font-style:italic}
+  .realia .text{font-size:14px;line-height:1.5;color:#aab4c0;margin-top:6px;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  /* Med ett foto blir bevismaterialet brett: bilden ovanpå, texten under. */
+  #r-foto .realia:has(img){grid-template-columns:minmax(0,1fr);gap:12px}
+  #r-foto .realia:has(img) .bild{width:100%;height:auto;aspect-ratio:3/1}
+  #r-foto .realia:has(img) .text{-webkit-line-clamp:2}
+
+  /* Hur man tar sig vidare hör till tangentbordet, så det står vid det. */
+  #ledtrad{position:absolute;left:50%;bottom:146px;transform:translateX(-50%);
+    width:min(440px, calc(100vw - 48px));padding:12px 16px;text-align:center;
+    background:rgba(10,12,16,.88);border:1px solid var(--line);border-radius:6px;
+    font-size:14px;line-height:1.5;color:var(--fg)}
+  #ledtrad span{display:block;margin-top:3px;font-size:12px;color:var(--dim)}
+
+  .ledtrad-inne{display:none;margin-top:18px;font-size:14px;line-height:1.5;color:var(--fg)}
+  .ledtrad-inne span{display:block;margin-top:3px;font-size:12px;color:var(--dim)}
+  @media (max-width:1099px){
+    #ledtrad{display:none}
+    .ledtrad-inne{display:block}
+  }
+
+  /* Medan domen visas krymper tangentbordet och lämnar plats åt panelerna. */
+  #kb{transition:transform .5s ease, opacity .5s ease;transform-origin:50% 100%}
+  body:has(#verdict.on) #kb{transform:translateX(-50%) scale(.6);opacity:.55}
 </style>
 </head>
 <body>
@@ -143,8 +198,8 @@
     <div class="punkter">
       <div><b>149 miljoner km²</b>Hela jordens landyta, tillgänglig från första svepet.
         Inga områden låsta bakom en uppgradering.</div>
-      <div><b>Nio öppna källor</b>Karta, väder, höjd, luft, foto, arter, seismik, musik
-        och uppslagsverk. Inga nycklar, inga konton, inga spårare.</div>
+      <div><b>Sju öppna källor</b>Karta, ortnamn, väder, foto, arter, uppslagsverk
+        och radio. Inga nycklar, inga konton, inga spårare.</div>
       <div><b>Noll inlärningstid</b>Inga kommandon att memorera, inga genvägar att slå upp.
         Lägg händerna på tangentbordet.</div>
     </div>
@@ -152,7 +207,7 @@
     <div class="salj"><b>Tiden visas i beats.</b> Swatch Internet Time delar dygnet i
       1 000 lika delar och har inga tidszoner, vilket gör den till det enda tidsformat
       som fungerar lika bra överallt du kan hamna. @500 inträffar samtidigt i Reykjavik
-      och i Ulaanbaatar. Lokal tid redovisas som fotnot.</div>
+      och i Ulaanbaatar.</div>
 
     <div class="cta">Lägg händerna på tangentbordet för att börja</div>
     <div class="finstilt">Positionen härleds ur tangenttryckens fysiska tyngdpunkt.
@@ -167,20 +222,45 @@
 
 <div id="kb"><div id="centroid"></div></div>
 
-<div id="foto">
-  <div class="etikett">bild från platsen</div>
-  <div id="foto-ram"><div id="foto-vantar">letar efter en bild …</div></div>
-  <div id="foto-text"></div>
-</div>
-
 <div id="verdict">
-  <h1>DU ÄR HÄR</h1>
-  <div class="plats" id="v-plats">—</div>
-  <div class="sub" id="v-coords"></div>
-  <div class="precision" id="v-precision"></div>
-  <div id="kort"></div>
-  <div class="foot">Haven är bortvridna ur projektionen, så varje tangent är land.
-    Tryck på valfri tangent för att hamna någon annanstans.</div>
+  <div id="lage" class="panel">
+    <h1>DU ÄR HÄR</h1>
+    <div id="v-plats">—</div>
+    <div id="v-land"></div>
+    <div id="v-coords"></div>
+
+    <div id="vader-rad" class="rad">
+      <div><div class="etikett">väder</div><div class="tal" id="k-temp">—</div>
+        <div class="under" id="k-beskr"></div></div>
+      <div><div class="etikett">vind</div><div class="tal" id="k-vind">—</div>
+        <div class="under" id="k-vindfran"></div></div>
+    </div>
+    <div id="tid-rad" class="rad">
+      <div class="etikett">tid</div>
+      <span id="k-beats">@—</span>
+      <div class="under">internettid, samma överallt</div>
+    </div>
+
+    <div id="radio-rad">
+      <div class="etikett">radio från platsen</div>
+      <div class="station">
+        <div class="eq"><i></i><i></i><i></i><i></i></div>
+        <div><div id="k-radio">…</div><div id="k-radio-d"></div></div>
+      </div>
+      <div id="k-radio-tangent"><kbd>⌘</kbd><kbd>M</kbd><span id="k-radio-verb">pausa</span></div>
+    </div>
+    <!-- Smal skärm: mitten räcker inte till kortet, så det står här i stället. -->
+    <div class="ledtrad-inne">Tryck på valfri tangent för att hamna någon annanstans.
+      <span>Haven är bortvridna ur projektionen, så varje tangent är land.</span></div>
+  </div>
+
+  <div id="vetande" class="panel">
+    <h2>Onödigt vetande</h2>
+    <div id="realia"></div>
+  </div>
+
+  <div id="ledtrad">Tryck på valfri tangent för att hamna någon annanstans.
+    <span>Haven är bortvridna ur projektionen, så varje tangent är land.</span></div>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -557,7 +637,6 @@ function tick(){
     phase = 'live'; peak = 0; trail = []; calmTicks = 0;
     $('phase').textContent = 'läser av';
     $('verdict').classList.remove('on');
-    $('foto').classList.remove('on');
     sattRegn(false);
     stoppaRadio();
     if(mapReady) map.setPaintProperty('trail', 'line-opacity', 0.55);
@@ -620,10 +699,9 @@ async function lock(){
   const cx = sx / Math.max(sw, 1e-6), cy = sy / Math.max(sw, 1e-6);
   const [lon, lat] = toLngLat(cx, cy);
 
-  /* Ju häftigare svep, desto mindre osäkerhetscirkel — och desto mer
-     tvärsäker blir appen. Sambandet är helt påhittat. */
+  /* Ju häftigare svep, desto mindre osäkerhetscirkel. Sambandet är helt
+     påhittat. */
   const radius = Math.max(1.5, 5_000_000 * Math.exp(-peak / 6));
-  const confidence = Math.min(99.4, 100 * (1 - Math.exp(-peak / 14)));
 
   if(mapReady){
     map.getSource('circle').setData(circlePoly(lat, lon, radius));
@@ -636,39 +714,36 @@ async function lock(){
 
   const dLat = radius / 111320, dLon = dLat / Math.max(0.1, Math.cos(lat*Math.PI/180));
   map.fitBounds([[lon-dLon, lat-dLat],[lon+dLon, lat+dLat]],
-    {padding:{top:90, bottom:230, left:480, right:90}, duration:2200, maxZoom:15});
+    {padding:{top:100, bottom:170, left:$('lage').offsetWidth + 70,
+              right:$('vetande').offsetWidth + 70},
+     duration:2200, maxZoom:15});
 
   /* Snabba API:er först — kortet ska upp direkt */
   const round = ++roundId;
-  const [place, wx, wiki] = await Promise.all([reverse(lat,lon), weather(lat,lon), article(lat,lon)]);
+  const [place, wx] = await Promise.all([reverse(lat,lon), weather(lat,lon)]);
   if(round !== roundId) return;
 
-  $('v-plats').textContent = place.country && place.country !== '—'
-    ? `${place.name}, ${place.country}` : place.name;
+  /* Orten är rubriken, landet och koordinaten dess adress. */
+  $('v-plats').textContent = place.name;
+  $('v-land').textContent = place.country && place.country !== '—' ? place.country : '';
   $('v-coords').textContent = fmt(lat, lon);
-  $('v-precision').textContent =
-    `Säkerhet ${confidence.toFixed(1)} %  ·  felmarginal ± ${km(radius)}`;
 
-  /* Ett urval, inte allt. Det som hör ihop ligger på samma kort: vädret bär
-     vinden, terrängen bär luften, dygnet bär den lokala tiden. Resten fylls i
-     när respektive källa svarar. */
-  const v = id => `<span id="${id}">…</span>`;
-  $('kort').innerHTML = [
-    ['Väder',             wx.text,          vindText(wx)],
-    ['Terräng',           v('k-hojd'),      v('k-luft')],
-    ['Radio från platsen', v('k-radio') + '<span id="k-radio-m"></span>',
-                           v('k-musik'),     true],
-    ['Närmaste artikel',  wiki,             '',               true],
-    ['Närmaste art',      v('k-art'),       ''],
-    ['Seismik',           v('k-skalv'),     ''],
-    ['Tid',               '<span id="k-beats">@—</span>',
-                          `lokal tid ${wx.time} · <span id="k-sol">…</span>`, true],
-  ].map(([etikett, varde, under, bred]) =>
-    `<div class="kort${bred ? ' bred' : ''}">` +
-      `<div class="etikett">${etikett}</div>` +
-      `<div class="varde">${varde}</div>` +
-      (under ? `<div class="under">${under}</div>` : '') +
-    '</div>').join('');
+  const [vindTal, vindUnder] = vindDelar(wx);
+  $('k-temp').textContent = wx.temp;
+  $('k-beskr').textContent = wx.beskr;
+  $('k-vind').textContent = vindTal;
+  $('k-vindfran').textContent = vindUnder;
+  tickTid();
+
+  radioLage('', 'söker station …', '');
+
+  /* Varje stycke realia får en tom ram direkt och fylls när källan svarar. */
+  $('realia').innerHTML = REALIA.map(([id, rubrik]) =>
+    `<section class="stycke" id="${id}">` +
+      `<div class="rubrik"><span>${rubrik}</span><span class="avst"></span></div>` +
+      '<div class="realia"><div class="bild">…</div>' +
+      '<div><div class="titel">…</div><div class="bi"></div><div class="text"></div></div></div>' +
+    '</section>').join('');
 
   $('phase').textContent = 'position fastställd';
   $('verdict').classList.add('on');
@@ -680,7 +755,8 @@ async function lock(){
 
   /* Resten kommer när den kommer. Kortet står redan uppe. */
   visaFoto(lat, lon, round);
-  extraRader(lat, lon, place.kod, round);
+  visaArtikel(lat, lon, round);
+  visaArt(lat, lon, round);
   startaRadio(lat, lon, round);
 }
 
@@ -720,13 +796,13 @@ async function weather(lat, lon){
     const j = await r.json();
     const c = j.current;
     return {
-      text: `${WMO[c.weather_code] ?? 'oklart'}, ${Math.round(c.temperature_2m)} °C`,
-      time: (c.time || '').slice(11) + '  ' + (j.timezone_abbreviation || ''),
+      beskr: WMO[c.weather_code] ?? 'oklart',
+      temp: `${Math.round(c.temperature_2m)} °C`,
       fart: c.wind_speed_10m,
       fran: c.wind_direction_10m,
       ra: c,                      // hela mätningen, till konfettins väderlägen
     };
-  }catch{ return {text:'—', time:'—'}; }
+  }catch{ return {beskr:'fick inget svar', temp:'—'}; }
 }
 
 /* Geosearch tar som mest 10 km radie, och svenska Wikipedia är glest geotaggat.
@@ -761,16 +837,17 @@ async function article(lat, lon){
         const hink = i % 2 === 0 ? 'sv' : 'en';
         const nuvarande = hink === 'sv' ? sv : en;
         if(!nuvarande || d < nuvarande.d){
-          if(hink === 'sv') sv = {d, titel: t.title}; else en = {d, titel: t.title};
+          if(hink === 'sv') sv = {d, titel: t.title, sprak: 'sv'};
+          else en = {d, titel: t.title, sprak: 'en'};
         }
       }
     });
 
     /* Svensk titel vinner om den inte ligger påtagligt längre bort. */
     const bast = sv && (!en || sv.d <= en.d * 1.25) ? sv : en;
-    if(bast) return `${bast.titel}, ${km(bast.d)} bort`;
+    if(bast) return bast;
   }
-  return 'ingen inom 100 km';
+  return null;
 }
 
 function haversine(la1, lo1, la2, lo2){
@@ -866,27 +943,18 @@ function arFoto(sida, ii){
 }
 
 async function visaFoto(lat, lon, round){
-  $('foto-ram').innerHTML = '<div id="foto-vantar">letar efter en bild …</div>';
-  $('foto-text').textContent = '';
-  $('foto').classList.add('on');
-
   /* Gatubild först. Den är ögonhöjd och slår allt annat. */
   const gata = await mapillaryVid(lat, lon);
   if(round !== roundId) return;
   if(gata){
-    const img = document.createElement('img');
-    img.alt = 'gatubild';
-    img.onerror = () => {
-      $('foto-ram').innerHTML = '<div id="foto-vantar">bilden gick inte att hämta</div>';
-    };
-    img.src = gata.bild.thumb_1024_url;
-    $('foto-ram').replaceChildren(img);
-    const ar = gata.bild.captured_at
+    const datum = gata.bild.captured_at
       ? new Date(gata.bild.captured_at).toLocaleDateString('sv-SE') : 'okänt datum';
-    $('foto-text').innerHTML =
-      `<b>Gatubild${gata.bild.is_pano ? ' i 360°' : ''}</b> — ${km(gata.d)} härifrån<br>` +
-      `${ar} · CC BY-SA 4.0 · Mapillary`;
-    return;
+    return realia('r-foto', round, {
+      titel: `Gatubild${gata.bild.is_pano ? ' i 360°' : ''}`,
+      bi: `${datum} · CC BY-SA 4.0 · Mapillary`,
+      bild: gata.bild.thumb_1024_url,
+      avst: km(gata.d) + ' bort',
+    });
   }
 
   let bast = null, sokt = 0;
@@ -908,116 +976,140 @@ async function visaFoto(lat, lon, round){
   }
   if(round !== roundId) return;
 
-  if(!bast){
-    $('foto-ram').innerHTML = '<div id="foto-vantar">ingen har fotograferat här<br>' +
-      `<span style="opacity:.55">inte inom ${sokt} km heller</span></div>`;
-    return;
-  }
+  if(!bast) return realia('r-foto', round, {
+    titel: 'Ingen har fotograferat här',
+    text: `Inte inom ${sokt} km heller.`,
+  });
 
   const m = bast.ii.extmetadata || {};
-  const titel = bast.sida.title.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '');
+  const titel = bast.sida.title.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '')
+    .replace(/_/g, ' ');
   const upphov = tillText(m.Artist && m.Artist.value) || 'okänd upphovsperson';
   const licens = tillText(m.LicenseShortName && m.LicenseShortName.value) || 'se Commons';
-
-  const img = document.createElement('img');
-  img.alt = titel;
-  img.onerror = () => {
-    $('foto-ram').innerHTML = '<div id="foto-vantar">bilden gick inte att hämta</div>';
-  };
-  img.src = bast.ii.thumburl;
-  $('foto-ram').replaceChildren(img);
-  $('foto-text').innerHTML = `<b>${esc(titel)}</b> — ${km(bast.d)} härifrån<br>` +
-    `${esc(upphov)} · ${esc(licens)} · Wikimedia Commons`;
+  realia('r-foto', round, {
+    titel,
+    bi: `${upphov} · ${licens} · Wikimedia Commons`,
+    text: forsta(tillText(m.ImageDescription && m.ImageDescription.value)),
+    bild: bast.ii.thumburl,
+    avst: km(bast.d) + ' bort',
+  });
 }
-/* --- 8. Fler öppna källor -----------------------------------------------
-   Alla nyckellösa, alla parallella, var och en fyller sin egen rad när den
-   svarar. Kortet står redan uppe, så ingen av dem kan hålla upp något.
-   GDELT hade gett nyheter men faller på CORS; det kräver en mellanserver.
+/* --- 8. Onödigt vetande -------------------------------------------------
+   Platsens själ, levererad som realia: konkreta saker med bild och några
+   rader text. Varje stycke har en ram som står uppe från början och fylls
+   när dess källa svarar, så ingen källa kan hålla upp kortet. Texten hämtas,
+   den skrivs aldrig av oss. GDELT hade gett nyheter men faller på CORS.
    ------------------------------------------------------------------------ */
-const fyll = (id, txt, round) => {
-  if(round !== roundId) return;
-  const el = $(id); if(el) el.textContent = txt;
-};
 const hamta = async (u, ms = 9000) => {
   const r = await fetch(u, {signal: AbortSignal.timeout(ms)});
   return r.json();
 };
 
-function extraRader(lat, lon, kod, round){
-  /* Höjd över havet */
-  hamta(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`)
-    .then(j => fyll('k-hojd', Math.round(j.elevation[0]).toLocaleString('sv-SE') + ' m ö.h.', round))
-    .catch(() => fyll('k-hojd', '—', round));
+const REALIA = [                                      // [element-id, rubrik]
+  ['r-foto',    'Bevismaterial'],                       // närmaste foto
+  ['r-artikel', 'Närmaste uppslagsord'],                // närmaste Wikipedia-artikel
+  ['r-art',     'Närmaste granne'],                     // närmaste artobservation
+];
+const REALIA_MENINGAR = 2;            // hur många meningar av sammanfattningen som visas
+const ART_RADIE_KM = 25;              // iNaturalist: hur långt bort en observation får ligga
 
-  /* Soluppgång och solnedgång på plats */
-  hamta(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-        '&daily=sunrise,sunset&timezone=auto&forecast_days=1')
-    .then(j => fyll('k-sol', `sol ${j.daily.sunrise[0].slice(11)}–${j.daily.sunset[0].slice(11)}`, round))
-    .catch(() => fyll('k-sol', '—', round));
+/* De första meningarna, inte hela ingressen. Förkortningar som "bl.a." kan
+   klippa en mening för tidigt; det får vi leva med. */
+function forsta(text, n = REALIA_MENINGAR){
+  const m = String(text || '').replace(/\s+/g, ' ').trim().match(/[^.!?]+[.!?]+(\s|$)/g);
+  return m ? m.slice(0, n).join('').trim() : String(text || '').trim();
+}
 
-  /* Luftkvalitet */
-  hamta(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}` +
-        `&longitude=${lon}&current=pm2_5`)
-    .then(j => {
-      const v = j.current && j.current.pm2_5;
-      if(v == null) return fyll('k-luft', '—', round);
-      const ord = v < 10 ? 'bra' : v < 25 ? 'måttlig' : v < 50 ? 'dålig' : 'mycket dålig';
-      fyll('k-luft', `${v.toFixed(1)} µg/m³ PM2,5, ${ord}`, round);
-    })
-    .catch(() => fyll('k-luft', '—', round));
+function realia(id, round, {titel, bi = '', kursiv = false, text = '', bild = '', avst = ''}){
+  if(round !== roundId) return;
+  const k = $(id); if(!k) return;
+  k.querySelector('.titel').textContent = titel;
+  k.querySelector('.bi').textContent = bi;
+  k.querySelector('.bi').classList.toggle('kursiv', kursiv);
+  k.querySelector('.text').textContent = text;
+  k.querySelector('.avst').textContent = avst;
+  const ram = k.querySelector('.bild');
+  if(!bild){ ram.textContent = 'ingen bild'; return; }
+  const img = document.createElement('img');
+  img.alt = titel;
+  img.onerror = () => { ram.textContent = 'bilden gick inte att hämta'; };
+  img.src = bild;
+  ram.replaceChildren(img);
+}
 
-  /* Närmaste jordskalv det senaste året */
-  const ettArSen = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-  hamta('https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson' +
-        `&latitude=${lat}&longitude=${lon}&maxradiuskm=600&limit=1` +
-        `&orderby=magnitude&starttime=${ettArSen}`)
-    .then(j => {
-      const f = j.features && j.features[0];
-      if(!f) return fyll('k-skalv', 'inget inom 600 km på ett år', round);
-      const [lo2, la2] = f.geometry.coordinates;
-      fyll('k-skalv', `M${f.properties.mag.toFixed(1)}, ${km(haversine(lat, lon, la2, lo2))} bort`, round);
-    })
-    .catch(() => fyll('k-skalv', '—', round));
+async function visaArtikel(lat, lon, round){
+  const a = await article(lat, lon);
+  if(round !== roundId) return;
+  if(!a) return realia('r-artikel', round, {titel: 'Ingen artikel inom 100 km',
+    text: 'Ingen har skrivit om något här, eller i närheten.'});
 
-  /* Närmaste artobservation, granskad av iNaturalists community */
-  hamta(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}&radius=25` +
-        '&quality_grade=research&per_page=20&locale=sv&order_by=observed_on')
-    .then(j => {
-      let bast = null;
-      for(const o of j.results || []){
-        const c = o.geojson && o.geojson.coordinates;
-        if(!c || !o.taxon) continue;
-        const d = haversine(lat, lon, c[1], c[0]);
-        if(!bast || d < bast.d) bast = {d, namn: o.taxon.preferred_common_name || o.taxon.name};
-      }
-      fyll('k-art', bast ? `${bast.namn}, ${km(bast.d)} bort` : 'ingen observerad inom 25 km', round);
-    })
-    .catch(() => fyll('k-art', '—', round));
+  /* Sammanfattningen bär både ingress och tumnagel i ett och samma anrop. */
+  let sam = {};
+  try{
+    sam = await hamta(`https://${a.sprak}.wikipedia.org/api/rest_v1/page/summary/` +
+      encodeURIComponent(a.titel.replace(/ /g, '_')));
+  }catch{}
+  realia('r-artikel', round, {
+    titel: a.titel,
+    bi: sam.description || '',
+    text: forsta(sam.extract) || 'Artikeln svarade inte.',
+    bild: sam.thumbnail && sam.thumbnail.source,
+    avst: km(a.d) + ' bort',
+  });
+}
 
-  /* Grupper registrerade i landet, ur MusicBrainz */
-  if(kod){
-    hamta(`https://musicbrainz.org/ws/2/artist?query=country:${kod}%20AND%20type:group` +
-          '&fmt=json&limit=3')
-      .then(j => {
-        /* MusicBrainz släpper ungefär ett anrop i sekunden och svarar då utan
-           artists-fältet. Det är inte samma sak som att landet saknar band. */
-        if(!j || !Array.isArray(j.artists)) return fyll('k-musik', 'fick inget svar', round);
-        const namn = j.artists.map(a => a.name).filter(Boolean).slice(0, 3);
-        fyll('k-musik', namn.length ? namn.join(', ') : 'inga registrerade', round);
-      })
-      .catch(() => fyll('k-musik', '—', round));
-  } else fyll('k-musik', '—', round);
+async function visaArt(lat, lon, round){
+  /* Närmaste observation som iNaturalists community har granskat. */
+  let bast = null;
+  try{
+    const j = await hamta(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}` +
+      `&radius=${ART_RADIE_KM}&quality_grade=research&per_page=20&locale=sv&order_by=observed_on`);
+    for(const o of j.results || []){
+      const c = o.geojson && o.geojson.coordinates;
+      if(!c || !o.taxon) continue;
+      const d = haversine(lat, lon, c[1], c[0]);
+      if(!bast || d < bast.d) bast = {d, o};
+    }
+  }catch{
+    return realia('r-art', round, {titel: 'Fick inget svar', text: 'iNaturalist svarade inte.'});
+  }
+  if(round !== roundId) return;
+  if(!bast) return realia('r-art', round, {titel: `Inga grannar inom ${ART_RADIE_KM} km`,
+    text: 'Ingen har fotograferat en levande varelse här och fått den artbestämd.'});
+
+  const {o, d} = bast, t = o.taxon;
+  /* Observatörens eget foto före artens standardbild: det är taget här. */
+  const foto = (o.photos && o.photos[0] && o.photos[0].url || '').replace('/square.', '/medium.')
+    || (t.default_photo && t.default_photo.medium_url) || '';
+  const datum = o.observed_on ? new Date(o.observed_on).toLocaleDateString('sv-SE') : null;
+
+  let sammanfattning = '';
+  try{
+    const tx = await hamta(`https://api.inaturalist.org/v1/taxa/${t.id}?locale=sv`);
+    sammanfattning = forsta(tillText(tx.results && tx.results[0] && tx.results[0].wikipedia_summary));
+  }catch{}
+
+  const namn = t.preferred_common_name || t.name;
+  realia('r-art', round, {
+    titel: namn.charAt(0).toUpperCase() + namn.slice(1),
+    bi: t.preferred_common_name ? t.name : '',
+    kursiv: true,
+    text: sammanfattning ||
+      `Observerad ${datum || 'okänt datum'}. Artbestämningen är granskad av iNaturalists community.`,
+    bild: foto,
+    avst: km(d) + ' bort',
+  });
 }
 /* Meteorologisk vindriktning anger varifrån det blåser, räknat medsols från
    norr. Vektorn dit vinden FÄRDAS blir därför den motsatta: en vind från väst
    (270°) skjuter konfettin österut, alltså åt höger på skärmen. */
 const VADERSTRECK = ['nord', 'nordost', 'ost', 'sydost', 'syd', 'sydväst', 'väst', 'nordväst'];
 
-function vindText(wx){
-  if(wx.fart == null) return '—';
-  if(wx.fart < 1) return 'stiltje';
-  const s = VADERSTRECK[Math.round(wx.fran / 45) % 8];
-  return `${Math.round(wx.fart)} km/h från ${s}`;
+/* [stort tal, rad under] till mätarraden */
+function vindDelar(wx){
+  if(wx.fart == null) return ['—', 'fick inget svar'];
+  if(wx.fart < 1) return ['0 km/h', 'stiltje'];
+  return [`${Math.round(wx.fart)} km/h`, 'från ' + VADERSTRECK[Math.round(wx.fran / 45) % 8]];
 }
 
 let vindX = 0;                      // sidledes acceleration på konfettin
@@ -1352,36 +1444,67 @@ function stoppaRadio(){
 addEventListener('pagehide', stoppaRadio);
 addEventListener('beforeunload', stoppaRadio);
 
+/* Radiokortet har tre lägen: '' (söker, saknas eller trasig), 'spelar' och
+   'pausad'. Utjämnaren rör sig bara när det hörs något, och tangenten visas
+   bara när det finns något att pausa eller spela. */
+let radioAvst = '';
+function radioLage(lage, namn, avst, notis = ''){
+  const kort = $('radio-rad'); if(!kort) return;
+  kort.className = lage;
+  if(namn != null) $('k-radio').textContent = namn;
+  if(avst != null) radioAvst = avst;
+  $('k-radio-d').textContent = radioAvst + (notis ? (radioAvst ? '  ·  ' : '') + notis : '');
+  $('k-radio-verb').textContent = lage === 'spelar' ? 'pausa' : 'spela';
+}
+
+/* ⌘M pausar och spelar. Tangenttrycket räknas som en användargest, så det
+   startar även en ström som webbläsaren först spärrade. */
 function vaxlaTyst(){
-  tyst = !tyst;
-  if(ljud) ljud.volume = tyst ? 0 : RADIO_VOLYM;
-  const u = $('k-radio-m');
-  if(u) u.textContent = tyst ? ' · tyst' : '';
+  if(!ljud) return;
+  if(ljud.paused){
+    tyst = false;
+    ljud.volume = RADIO_VOLYM;
+    const mitt = ljud;
+    mitt.play().then(() => { if(ljud === mitt) radioLage('spelar'); }).catch(() => {});
+  }else{
+    tyst = true;
+    ljud.pause();
+    radioLage('pausad');
+  }
 }
 
 async function startaRadio(lat, lon, round){
   stoppaRadio();
   const traff = await sokStation(lat, lon);
   if(round !== roundId) return;
-  if(!traff){ fyll('k-radio', 'ingen station i närheten', round); return; }
+  if(!traff){ radioLage('', 'Ingen station i närheten', ''); return; }
 
   const st = traff.st;
-  fyll('k-radio', `${st.name.trim().slice(0, 42)} · ${km(traff.d)} bort`, round);
+  const namn = st.name.trim().slice(0, 42);
+  radioLage('', namn, km(traff.d) + ' bort');
 
   ljud = new Audio(st.url_resolved);
   spelare.add(ljud);
   ljud.volume = 0;
   ljud.addEventListener('error', () => {
-    if(round === roundId) fyll('k-radio', `${st.name.trim().slice(0, 42)} · strömmen svarar inte`, round);
+    if(round === roundId) radioLage('', namn, null, 'strömmen svarar inte');
   }, {once: true});
+
+  /* Pausade du förra stationen förblir det tyst tills du säger annat. */
+  if(tyst){ radioLage('pausad'); return; }
 
   const mitt = ljud;
   try{ await mitt.play(); }
-  catch{ return; }                                   // webbläsaren sa nej, kortet står kvar
+  catch{                                             // webbläsaren sa nej, kortet står kvar
+    if(round === roundId) radioLage('pausad', null, null, 'ljudet spärrat');
+    return;
+  }
   if(round !== roundId || ljud !== mitt){            // ett nytt svep hann före
     river(mitt); spelare.delete(mitt);
     return;
   }
+
+  radioLage('spelar');
 
   /* Tona upp över ett par sekunder. Att kastas in mitt i en reklampaus på full
      volym är inte den upplevelse vi är ute efter. */
@@ -1389,7 +1512,7 @@ async function startaRadio(lat, lon, round){
   tonare = setInterval(() => {
     if(!ljud){ clearInterval(tonare); return; }
     v = Math.min(1, v + 0.04);
-    ljud.volume = tyst ? 0 : RADIO_VOLYM * v;
+    ljud.volume = RADIO_VOLYM * v;
     if(v >= 1){ clearInterval(tonare); tonare = null; }
   }, 60);
 }
@@ -1400,7 +1523,7 @@ async function startaRadio(lat, lon, round){
    Det finns inga tidszoner. @500 inträffar i samma ögonblick överallt på
    jorden. För en tjänst vars hela uppgift är att kasta dig till en slumpmässig
    punkt på klotet är det inte en kuriositet utan det enda tidsformat som inte
-   behöver räknas om varje gång du landar. Lokal tid står kvar som fotnot.
+   behöver räknas om varje gång du landar. Därför visas ingen lokal tid alls.
    ------------------------------------------------------------------------ */
 const MS_PER_BEAT = 86400;                      // 86,4 sekunder
 
