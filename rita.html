@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tangentbordspenseln</title>
+<style>
+  :root{
+    --bg:#07080b; --fg:#e8ecf1; --dim:#6b7684; --line:#1b222e;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+    font-family:var(--mono);-webkit-font-smoothing:antialiased;cursor:none}
+  #c{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+  #status{position:absolute;top:0;left:0;right:0;padding:18px 24px;z-index:5;
+    display:flex;align-items:baseline;gap:22px;pointer-events:none;
+    text-shadow:0 0 12px var(--bg)}
+  #phase{font-size:13px;letter-spacing:.18em;text-transform:uppercase}
+  .stat{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .stat b{color:var(--fg);font-weight:400}
+
+  /* paletten: sex färger, en per samtidig tangent */
+  #palette{position:absolute;top:52px;left:24px;z-index:5;display:flex;gap:7px;pointer-events:none}
+  .sw{width:30px;height:30px;border-radius:4px;border:1px solid #ffffff14;
+    display:grid;place-items:center;font-size:10px;color:#00000099;
+    opacity:.3;transform:scale(.86);transition:opacity .12s,transform .12s}
+  .sw.on{opacity:1;transform:scale(1.1);border-color:#ffffff66}
+
+  #kb{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:5;
+    --u:24px;width:calc(22.5*var(--u));height:calc(6.5*var(--u));
+    background:rgba(7,8,11,.6);border:1px solid var(--line);border-radius:10px;
+    backdrop-filter:blur(10px);pointer-events:none}
+  .k{position:absolute;border:1px solid var(--line);border-radius:3px;
+    display:grid;place-items:center;font-size:8px;color:#333c49;overflow:hidden}
+  .k.hit{animation:flash .5s ease-out}
+  @keyframes flash{
+    0%{background:#fff;color:#07080b;border-color:#fff;box-shadow:0 0 14px #fff8}
+    100%{background:transparent;color:#333c49;border-color:var(--line);box-shadow:none}
+  }
+  #brush{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;
+    background:#fff;box-shadow:0 0 14px #fff;opacity:0;transition:opacity .2s}
+
+  #hint{position:absolute;bottom:22px;right:24px;z-index:5;font-size:10px;
+    color:var(--dim);line-height:1.8;text-align:right;pointer-events:none}
+  #hint kbd{color:var(--fg);font:inherit}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:6;
+    transition:opacity .35s}
+  #verdict{position:absolute;top:50%;left:34px;transform:translateY(-50%);z-index:7;
+    width:310px;padding:22px 24px;background:rgba(7,8,11,.93);border:1px solid var(--line);
+    border-left:3px solid #7ae582;border-radius:4px;backdrop-filter:blur(16px);
+    opacity:0;pointer-events:none;transition:opacity .45s}
+  #verdict.on{opacity:1}
+  #verdict .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+  #verdict h1{margin:4px 0 14px;font-size:27px;letter-spacing:.02em;line-height:1.1}
+  #v-shape{width:150px;height:150px;display:block;margin:0 auto 14px}
+  #verdict .row{display:flex;justify-content:space-between;gap:14px;padding:8px 0;
+    border-top:1px solid var(--line);font-size:11.5px}
+  #verdict .row .lbl{color:var(--dim);white-space:nowrap}
+  #v-extract{display:none;margin-top:14px;padding-top:13px;border-top:1px solid var(--line);
+    font-size:11px;line-height:1.6;color:#9aa5b1}
+  #verdict .foot{margin-top:16px;font-size:9.5px;color:#49525f;line-height:1.65}
+  #scan{position:absolute;top:0;bottom:0;width:2px;left:0;z-index:4;opacity:0;
+    background:linear-gradient(180deg,#fff0,#ffffffcc 20%,#ffffffcc 80%,#fff0);
+    box-shadow:0 0 22px #fff9;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="scan"></div>
+<div id="flash"></div>
+
+<div id="status">
+  <div id="phase">lägg händerna på tangentbordet</div>
+  <div class="stat">färg <b id="s-col">—</b></div>
+  <div class="stat">bredd <b id="s-w">0.0</b></div>
+  <div class="stat">speglingar <b id="s-f">1</b></div>
+  <div class="stat">drag <b id="s-n">0</b></div>
+</div>
+
+<div id="palette"></div>
+
+<div id="verdict">
+  <div class="eyebrow">du har ritat</div>
+  <h1 id="v-name">—</h1>
+  <canvas id="v-shape" width="300" height="300"></canvas>
+  <div id="v-rows"></div>
+  <div id="v-extract"></div>
+  <div class="foot">Formen jämförs med 177 länders silhuetter ur Natural Earth.
+    Likheten är en radiell signatur med 64 sektorer, bäst över alla vridningar.
+    Den säger ingenting om vad du faktiskt ritade.</div>
+</div>
+<div id="kb"><div id="brush"></div></div>
+
+<div id="hint">
+  <kbd>1–6 hållna</kbd> väljer färg<br>
+  greppa <kbd>shift ctrl alt</kbd> ×2 — de äter ingen rullgräns<br>
+  fingrar ihop: fri ritning · isär: symmetri<br>
+  <kbd>esc</kbd> hållen rensar · <kbd>cmd+s</kbd> sparar png<br>
+  sluta rita så spelas bilden · <kbd>cmd+p</kbd> igen · <kbd>cmd+e</kbd> wav
+</div>
+
+<script>
+/* ==========================================================================
+   TANGENTBORDSPENSELN
+   Samma inmatningsmotor som kartan: tangenternas fysiska tyngdpunkt styr var,
+   rörelsemängden styr hur mycket. Men här målar den istället för att gissa.
+
+   Antalet samtidiga tangenter väljer färg. USB-tangentbord rapporterar högst
+   sex åt gången — den gränsen är inte ett problem här, den ÄR paletten.
+   ========================================================================== */
+
+/* --- Fysisk layout: [code, x, y, bredd] i tangentenheter -----------------
+   Samma tabell som kartan har. Bryt ut till en delad fil om ni ändrar den ofta. */
+const KB_W = 22.5, KB_H = 6.5;
+const KEYS = [
+  ['Escape',0,0,1],['F1',2,0,1],['F2',3,0,1],['F3',4,0,1],['F4',5,0,1],
+  ['F5',6.5,0,1],['F6',7.5,0,1],['F7',8.5,0,1],['F8',9.5,0,1],
+  ['F9',11,0,1],['F10',12,0,1],['F11',13,0,1],['F12',14,0,1],
+  ['PrintScreen',15.25,0,1],['ScrollLock',16.25,0,1],['Pause',17.25,0,1],
+
+  ['Backquote',0,1.5,1],['Digit1',1,1.5,1],['Digit2',2,1.5,1],['Digit3',3,1.5,1],
+  ['Digit4',4,1.5,1],['Digit5',5,1.5,1],['Digit6',6,1.5,1],['Digit7',7,1.5,1],
+  ['Digit8',8,1.5,1],['Digit9',9,1.5,1],['Digit0',10,1.5,1],['Minus',11,1.5,1],
+  ['Equal',12,1.5,1],['Backspace',13,1.5,2],
+  ['Insert',15.25,1.5,1],['Home',16.25,1.5,1],['PageUp',17.25,1.5,1],
+  ['NumLock',18.5,1.5,1],['NumpadDivide',19.5,1.5,1],['NumpadMultiply',20.5,1.5,1],['NumpadSubtract',21.5,1.5,1],
+
+  ['Tab',0,2.5,1.5],['KeyQ',1.5,2.5,1],['KeyW',2.5,2.5,1],['KeyE',3.5,2.5,1],
+  ['KeyR',4.5,2.5,1],['KeyT',5.5,2.5,1],['KeyY',6.5,2.5,1],['KeyU',7.5,2.5,1],
+  ['KeyI',8.5,2.5,1],['KeyO',9.5,2.5,1],['KeyP',10.5,2.5,1],
+  ['BracketLeft',11.5,2.5,1],['BracketRight',12.5,2.5,1],['Backslash',13.5,2.5,1.5],
+  ['Delete',15.25,2.5,1],['End',16.25,2.5,1],['PageDown',17.25,2.5,1],
+  ['Numpad7',18.5,2.5,1],['Numpad8',19.5,2.5,1],['Numpad9',20.5,2.5,1],['NumpadAdd',21.5,2.5,1],
+
+  ['CapsLock',0,3.5,1.75],['KeyA',1.75,3.5,1],['KeyS',2.75,3.5,1],['KeyD',3.75,3.5,1],
+  ['KeyF',4.75,3.5,1],['KeyG',5.75,3.5,1],['KeyH',6.75,3.5,1],['KeyJ',7.75,3.5,1],
+  ['KeyK',8.75,3.5,1],['KeyL',9.75,3.5,1],['Semicolon',10.75,3.5,1],['Quote',11.75,3.5,1],
+  ['Enter',12.75,3.5,2.25],
+  ['Numpad4',18.5,3.5,1],['Numpad5',19.5,3.5,1],['Numpad6',20.5,3.5,1],
+
+  ['ShiftLeft',0,4.5,2.25],['KeyZ',2.25,4.5,1],['KeyX',3.25,4.5,1],['KeyC',4.25,4.5,1],
+  ['KeyV',5.25,4.5,1],['KeyB',6.25,4.5,1],['KeyN',7.25,4.5,1],['KeyM',8.25,4.5,1],
+  ['Comma',9.25,4.5,1],['Period',10.25,4.5,1],['Slash',11.25,4.5,1],['ShiftRight',12.25,4.5,2.75],
+  ['ArrowUp',16.25,4.5,1],
+  ['Numpad1',18.5,4.5,1],['Numpad2',19.5,4.5,1],['Numpad3',20.5,4.5,1],['NumpadEnter',21.5,4.5,1],
+
+  ['ControlLeft',0,5.5,1.25],['MetaLeft',1.25,5.5,1.25],['AltLeft',2.5,5.5,1.25],
+  ['Space',3.75,5.5,6.25],['AltRight',10,5.5,1.25],['MetaRight',11.25,5.5,1.25],
+  ['ContextMenu',12.5,5.5,1.25],['ControlRight',13.75,5.5,1.25],
+  ['ArrowLeft',15.25,5.5,1],['ArrowDown',16.25,5.5,1],['ArrowRight',17.25,5.5,1],
+  ['Numpad0',18.5,5.5,2],['NumpadDecimal',20.5,5.5,1],
+];
+const POS = new Map(KEYS.map(([c,x,y,w]) => [c, {x: x + w/2, y: y + 0.5}]));
+
+/* Sex färger, en per samtidig tangent. Ordnade varmt till kallt så att
+   paletten känns som en skala och inte som en slumpmässig hög. */
+const PALETTE = ['#ff5e5b','#ffb400','#7ae582','#4cc9f0','#a77dff','#ff7ac6'];
+
+/* --- Duken --------------------------------------------------------------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+function resize(){
+  const r = Math.min(devicePixelRatio || 1, 2);
+  W = cv.width = Math.round(innerWidth * r);
+  H = cv.height = Math.round(innerHeight * r);
+  ctx.lineCap = ctx.lineJoin = 'round';
+}
+addEventListener('resize', resize); resize();
+
+/* --- HUD ----------------------------------------------------------------- */
+const kb = document.getElementById('kb'), brush = document.getElementById('brush');
+const keyEls = new Map();
+const label = c => c.replace(/^Key|^Digit/,'').replace(/^Numpad/,'#')
+                    .replace(/^Arrow/,'').replace('Left','L').replace('Right','R').slice(0,5);
+for(const [code,x,y,w] of KEYS){
+  const el = document.createElement('div');
+  el.className = 'k';
+  el.style.left   = `calc(${x} * var(--u) + 2px)`;
+  el.style.top    = `calc(${y} * var(--u) + 2px)`;
+  el.style.width  = `calc(${w} * var(--u) - 4px)`;
+  el.style.height = 'calc(1 * var(--u) - 4px)';
+  el.textContent = label(code);
+  kb.appendChild(el); keyEls.set(code, el);
+}
+const pal = document.getElementById('palette');
+const swatches = PALETTE.map((c, i) => {
+  const d = document.createElement('div');
+  d.className = 'sw'; d.style.background = c; d.textContent = i + 1;
+  pal.appendChild(d); return d;
+});
+const $ = id => document.getElementById(id);
+
+/* --- Inmatningsmotorn ----------------------------------------------------
+   down   = hålls nere just nu (toppar vid 6, det är hårdvarans gräns)
+   touched = berörda de senaste 400 ms, driver rörelsemängd och spridning   */
+const down = new Set(), touched = new Map(), downAt = new Map();
+let intensity = 0, hits = 0;
+let sx = 0, sy = 0, sw = 0;          // avklingande viktade summor för tyngdpunkten
+let colorIdx = 0, colorHold = 0;     // färgen får hänga kvar en stund
+let colorCand = 0, colorSince = 0;   // fingerantal som väntar på att ta över
+let strokes = 0, drawing = false;
+let px = null, py = null;            // föregående penselposition i bildpunkter
+let escDown = 0;
+let dirty = false, stillSince = 0, rendering = false, source = null, startedAt = 0;
+
+const TAU_I = 0.25, TAU_C = 0.12;    // tidskonstanter i sekunder
+const SETTLE_MS = 1200;              // stillhet innan bilden spelas upp
+
+/* Hur länge en tangent måste ha legat nere för att räknas som ett grepp.
+   Tangenter du sveper förbi hålls bara 50–100 ms och ska inte påverka färgen —
+   annars blir fem vilande fingrar plus ett svep till sex, varje gång. */
+const GRIP_MS = 220;
+
+/* Hur länge ett greppantal måste ligga stilla innan det blir den nya färgen. */
+const COLOR_COMMIT_MS = 120;
+
+/* Hur länge färgrutan fortsätter lysa efter att du släppt. Rent kosmetiskt. */
+const COLOR_SHOW_MS = 600;
+
+addEventListener('keydown', e => {
+  if(e.metaKey){
+    if(e.code === 'KeyS'){ e.preventDefault(); save(); }
+    if(e.code === 'KeyP'){ e.preventDefault(); play(); }
+    if(e.code === 'KeyE'){ e.preventDefault(); exportWav(); }
+    return;                                   // släpp igenom cmd+r m.m.
+  }
+  e.preventDefault();
+  if(e.code === 'Escape' && !escDown) escDown = performance.now();
+  const p = POS.get(e.code); if(!p) return;
+  if(!down.has(e.code)) downAt.set(e.code, performance.now());
+  down.add(e.code);
+  if(e.repeat) return;                        // autorepeat ska inte räknas som rörelse
+  hits++; touched.set(e.code, performance.now());
+  const el = keyEls.get(e.code);
+  if(el){ el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
+}, true);
+
+addEventListener('keyup', e => {
+  if(!e.metaKey) e.preventDefault();
+  if(e.code === 'Escape') escDown = 0;
+  down.delete(e.code); downAt.delete(e.code);
+}, true);
+addEventListener('blur', () => { down.clear(); downAt.clear(); escDown = 0; });
+
+/* --- Ritloopen ----------------------------------------------------------- */
+let last = performance.now();
+requestAnimationFrame(function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+
+  // rensa duken om esc hålls nere
+  if(escDown && now - escDown > 800){ clearCanvas(); escDown = now + 1e6; }
+
+  // glöm tangenter äldre än 400 ms
+  for(const [k, t] of touched) if(now - t > 400) touched.delete(k);
+
+  // rörelsemängd: färska nedslag driver, hållna tangenter ger en botten
+  intensity = intensity * Math.exp(-dt / TAU_I) + hits + down.size * 6 * dt;
+  hits = 0;
+
+  /* Tyngdpunkt över unionen av hållna och nyss berörda tangenter. Bara touched
+     räcker inte: det fönstret är 400 ms, så en stilla hand tappade penseln
+     mitt i — och en stilla hand är precis vad man har när man väljer färg. */
+  const aktiva = new Set(touched.keys());
+  for(const k of down) aktiva.add(k);
+  let tx = 0, ty = 0, tn = 0;
+  for(const k of aktiva){ const p = POS.get(k); if(p){ tx += p.x; ty += p.y; tn++; } }
+  const kc = Math.exp(-dt / TAU_C);
+  sx = sx * kc + tx * (1 - kc); sy = sy * kc + ty * (1 - kc); sw = sw * kc + tn * (1 - kc);
+
+  /* Grepp: tangenter du vilar på, nere längre än GRIP_MS. De styr både färg
+     (hur många) och symmetri (hur brett isär). Att låta svepet styra symmetrin
+     var fel — ett brett drag drog upp den av sig självt, så allt blev runt. */
+  const grepp = [];
+  for(const [k, t0] of downAt) if(now - t0 >= GRIP_MS) grepp.push(k);
+
+  let spread = 0;
+  if(grepp.length > 1){
+    let gx = 0, gy = 0;
+    for(const k of grepp){ const p = POS.get(k); gx += p.x; gy += p.y; }
+    gx /= grepp.length; gy /= grepp.length;
+    for(const k of grepp){ const p = POS.get(k); spread += (p.x - gx) ** 2 + (p.y - gy) ** 2; }
+    spread = Math.sqrt(spread / grepp.length);
+  }
+  /* Fingrarna ihop ger ingen symmetri alls, och då går det att rita en stövel. */
+  const folds = spread < 1.2 ? 1 : Math.min(8, 1 + Math.round(spread / 1.6));
+
+  /* Färg: antalet samtidiga tangenter, men först när det legat stilla en stund.
+     Transienta tangenter i ett svep hinner aldrig fästa, en avsiktlig greppändring
+     gör det direkt. */
+  const n = Math.min(6, grepp.length);
+  if(n !== colorCand){ colorCand = n; colorSince = now; }
+  if(n > 0 && now - colorSince >= COLOR_COMMIT_MS) colorIdx = n - 1;
+  if(n > 0) colorHold = now;          // indikatorn lyser så länge något hålls nere,
+  const colorOn = now - colorHold < COLOR_SHOW_MS;   // oavsett om färgen just bytte
+
+  const active = intensity > 0.6 && sw > 0.05;
+
+  if(active){
+    const cx = (sx / sw) / KB_W * W, cy = (sy / sw) / KB_H * H;
+    const width = Math.min(46, 1.5 + intensity * 0.9) * (W / 1600);
+    if(px !== null) stroke(px, py, cx, cy, width, PALETTE[colorIdx], folds);
+    else strokes++;
+    px = cx; py = cy;
+    if(!drawing){ drawing = true; $('phase').textContent = 'målar'; }
+    dirty = true; stillSince = 0; stopAudio();
+    $('verdict').classList.remove('on');
+    brush.style.opacity = '1';
+    brush.style.left = `calc(${sx / sw} * var(--u))`;
+    brush.style.top  = `calc(${sy / sw} * var(--u))`;
+  } else {
+    px = py = null;
+    if(drawing){ drawing = false; $('phase').textContent = 'lyssnar'; }
+    brush.style.opacity = '0';
+    if(!stillSince) stillSince = now;
+  }
+
+  /* Slutar du rita spelas bilden upp av sig själv. Samma grammatik som kartan:
+     sluta röra dig, så uttalar sig maskinen. */
+  if(dirty && stillSince && now - stillSince > SETTLE_MS && !rendering && !source){
+    matchaLand();            // domen och ljudet kommer tillsammans
+    play();
+  }
+  if(source) drawScanLine();
+
+  swatches.forEach((s, i) => s.classList.toggle('on', colorOn && i === colorIdx));
+  $('s-col').textContent = colorOn ? colorIdx + 1 : '—';
+  $('s-w').textContent = intensity.toFixed(1);
+  $('s-f').textContent = folds;
+  $('s-n').textContent = strokes;
+});
+
+/* Varje drag ritas en gång per spegling, roterat runt dukens mitt, och sedan
+   en gång till speglat i y-led. En head roll blir en mandala istället för klotter. */
+function stroke(x0, y0, x1, y1, w, color, folds){
+  const cx = W / 2, cy = H / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.4;
+  ctx.strokeStyle = ctx.fillStyle = color;
+  ctx.lineWidth = w;
+  /* Canvas ritar ingenting för en linje med noll längd, inte ens med rund ände.
+     En helt stilla hand — vilket är precis vad man har när man väljer färg —
+     gav därför en osynlig pensel. Korta drag blir en prick istället. */
+  const prick = Math.hypot(x1 - x0, y1 - y0) < 0.4;
+  for(let k = 0; k < folds; k++){
+    ctx.rotate(2 * Math.PI / folds);
+    if(prick) ctx.beginPath(), ctx.arc(x0 - cx, y0 - cy, w / 2, 0, 2 * Math.PI), ctx.fill();
+    else ctx.beginPath(), ctx.moveTo(x0 - cx, y0 - cy), ctx.lineTo(x1 - cx, y1 - cy), ctx.stroke();
+    /* Spegelbilden ritades förut alltid, så varje bild hade minst tvåfaldig
+       symmetri och kunde aldrig bli avlång. Nu följer den symmetrin. */
+    if(folds > 1){
+      if(prick) ctx.beginPath(), ctx.arc(x0 - cx, cy - y0, w / 2, 0, 2 * Math.PI), ctx.fill();
+      else ctx.beginPath(), ctx.moveTo(x0 - cx, cy - y0), ctx.lineTo(x1 - cx, cy - y1), ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function clearCanvas(){
+  ctx.save(); ctx.globalCompositeOperation = 'source-over';
+  ctx.clearRect(0, 0, W, H); ctx.restore();
+  strokes = 0;
+  stopAudio(); lastBuffer = null; dirty = false; stillSince = 0;
+  $('verdict').classList.remove('on');
+  $('phase').textContent = 'lägg händerna på tangentbordet';
+  const f = $('flash'); f.style.transition = 'none'; f.style.opacity = '.5';
+  requestAnimationFrame(() => { f.style.transition = 'opacity .35s'; f.style.opacity = '0'; });
+}
+
+function save(){
+  const a = document.createElement('a');
+  a.download = 'tangentbordspensel-' + Date.now() + '.png';
+  cv.toBlob(b => { a.href = URL.createObjectURL(b); a.click(); URL.revokeObjectURL(a.href); });
+}
+
+/* ==========================================================================
+   BILDEN SOM LJUD
+   Duken läses som ett spektrogram: x är tid, y är tonhöjd, ljusstyrka är
+   amplitud. Hela svepet renderas offline till en ljudbuffert i stället för att
+   hålla 72 oscillatorer igång — deterministiskt, och går att exportera.
+
+   Symmetrin i bilden hörs: speglingarna lägger samma innehåll på flera ställen
+   längs x, vilket blir rytmisk upprepning, och på flera ställen längs y, vilket
+   blir staplade övertoner. En samlad mandala låter som ett ackord, rent klotter
+   som brus.
+   ========================================================================== */
+const BANDS = 72, COLUMNS = 256, SCAN_SECONDS = 6;
+const F_LO = 110, F_HI = 3520;        // A2 till A7, fem oktaver
+const PENTATONIC = true;              // false ger rått spektrogram, mer utomjordiskt
+
+/* Bandens frekvenser, logaritmiskt fördelade. Snäpps till A-moll-pentatonisk:
+   den skalan saknar dissonanta intervall, så även en tät bild låter avsiktlig. */
+const FREQ = (() => {
+  const scale = [0, 3, 5, 7, 10];
+  return Array.from({length: BANDS}, (_, i) => {
+    let f = F_LO * Math.pow(F_HI / F_LO, i / (BANDS - 1));
+    if(!PENTATONIC) return f;
+    const semi = 12 * Math.log2(f / F_LO);
+    const oct = Math.floor(semi / 12), within = semi - oct * 12;
+    let best = scale[0];
+    for(const s of scale) if(Math.abs(s - within) < Math.abs(best - within)) best = s;
+    return F_LO * Math.pow(2, (oct * 12 + best) / 12);
+  });
+})();
+
+let ac = null;
+const audio = () => (ac ||= new (window.AudioContext || window.webkitAudioContext)());
+
+/* Duken skalas ner till COLUMNS x BANDS — webbläsaren medelvärdesbildar åt oss. */
+const off = document.createElement('canvas');
+off.width = COLUMNS; off.height = BANDS;
+const offctx = off.getContext('2d', {willReadFrequently: true});
+
+function sampleCanvas(){
+  offctx.clearRect(0, 0, COLUMNS, BANDS);
+  offctx.drawImage(cv, 0, 0, COLUMNS, BANDS);
+  const d = offctx.getImageData(0, 0, COLUMNS, BANDS).data;
+  const env = [], pan = new Float32Array(BANDS);
+  let total = 0;
+  for(let i = 0; i < BANDS; i++){
+    const row = BANDS - 1 - i;                 // rad 0 är överst = högst ton
+    const e = new Float32Array(COLUMNS);
+    let warm = 0, cool = 0;
+    for(let x = 0; x < COLUMNS; x++){
+      const k = (row * COLUMNS + x) * 4;
+      const a = d[k + 3] / 255;
+      const r = d[k] / 255 * a, g = d[k + 1] / 255 * a, b = d[k + 2] / 255 * a;
+      e[x] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      warm += r; cool += b;
+      total += e[x];
+    }
+    // mjuka kanterna så kolumnbyten inte knäpper
+    const sm = new Float32Array(COLUMNS);
+    for(let x = 0; x < COLUMNS; x++){
+      let v = 0, n = 0;
+      for(let o = -2; o <= 2; o++){ const j = x + o; if(j >= 0 && j < COLUMNS){ v += e[j]; n++; } }
+      sm[x] = v / n;
+    }
+    env.push(sm);
+    pan[i] = Math.max(-1, Math.min(1, (cool - warm) / Math.max(0.001, cool + warm)));  // rött vänster, blått höger
+  }
+  return {env, pan, total};
+}
+
+function renderBuffer(){
+  const {env, pan, total} = sampleCanvas();
+  if(total < 0.5) return null;                 // tom duk
+  const sr = audio().sampleRate, N = Math.round(SCAN_SECONDS * sr);
+  const buf = audio().createBuffer(2, N, sr);
+  const L = buf.getChannelData(0), R = buf.getChannelData(1);
+
+  for(let i = 0; i < BANDS; i++){
+    const e = env[i];
+    let lo = -1, hi = -1;
+    for(let x = 0; x < COLUMNS; x++) if(e[x] > 0.004){ if(lo < 0) lo = x; hi = x; }
+    if(lo < 0) continue;                       // tomt band, hoppa helt
+    const w = 2 * Math.PI * FREQ[i] / sr, ph = Math.random() * Math.PI * 2;
+    const pl = Math.cos((pan[i] + 1) * Math.PI / 4), pr = Math.sin((pan[i] + 1) * Math.PI / 4);
+    const n0 = Math.max(0, Math.floor(lo / COLUMNS * N) - 1);
+    const n1 = Math.min(N, Math.ceil((hi + 1) / COLUMNS * N) + 1);
+    for(let n = n0; n < n1; n++){
+      const c = n / N * (COLUMNS - 1), c0 = c | 0, fr = c - c0;
+      const a = e[c0] + ((e[c0 + 1] ?? e[c0]) - e[c0]) * fr;
+      if(a <= 0.0005) continue;
+      const v = Math.sin(w * n + ph) * a;
+      L[n] += v * pl; R[n] += v * pr;
+    }
+  }
+
+  let peak = 0;
+  for(let n = 0; n < N; n++){ peak = Math.max(peak, Math.abs(L[n]), Math.abs(R[n])); }
+  if(peak < 1e-6) return null;
+  const g = 0.9 / peak;
+  const fade = Math.round(sr * 0.03);
+  for(let n = 0; n < N; n++){
+    let k = g;
+    if(n < fade) k *= n / fade;
+    if(n > N - fade) k *= (N - n) / fade;
+    L[n] *= k; R[n] *= k;
+  }
+  return buf;
+}
+
+let lastBuffer = null;
+
+async function play(){
+  if(rendering) return;
+  rendering = true;
+  stopAudio();
+  $('phase').textContent = 'renderar';
+  await audio().resume();
+  await new Promise(r => setTimeout(r, 0));    // låt gränssnittet rita om först
+  const t0 = performance.now();
+  lastBuffer = renderBuffer();
+  const ms = Math.round(performance.now() - t0);
+  rendering = false;
+  dirty = false;
+  if(!lastBuffer){ $('phase').textContent = 'tom duk'; return; }
+  source = audio().createBufferSource();
+  source.buffer = lastBuffer;
+  source.connect(audio().destination);
+  source.onended = () => { source = null; $('scan').style.opacity = '0';
+                           $('phase').textContent = 'lägg händerna på tangentbordet'; };
+  startedAt = audio().currentTime;
+  source.start();
+  $('phase').textContent = 'spelar  ' + ms + ' ms';
+  $('scan').style.opacity = '1';
+}
+
+function stopAudio(){
+  if(source){ try{ source.onended = null; source.stop(); }catch{} source = null; }
+  $('scan').style.opacity = '0';
+}
+
+function drawScanLine(){
+  const t = (audio().currentTime - startedAt) / SCAN_SECONDS;
+  $('scan').style.left = Math.max(0, Math.min(1, t)) * innerWidth + 'px';
+}
+
+/* Exportera som 16-bitars wav, så att ljudet går att mata in i nästa sak. */
+function exportWav(){
+  const buf = lastBuffer || renderBuffer();
+  if(!buf) return;
+  const n = buf.length, ch = 2, sr = buf.sampleRate;
+  const ab = new ArrayBuffer(44 + n * ch * 2), v = new DataView(ab);
+  const str = (o, t) => { for(let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * ch * 2, true);
+  v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * ch * 2, true);
+  const L = buf.getChannelData(0), Rr = buf.getChannelData(1);
+  let o = 44;
+  for(let i = 0; i < n; i++){
+    for(const c of [L, Rr]){
+      const x = Math.max(-1, Math.min(1, c[i]));
+      v.setInt16(o, x * 32767, true); o += 2;
+    }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ab], {type: 'audio/wav'}));
+  a.download = 'tangentbordspensel-' + Date.now() + '.wav';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ==========================================================================
+   VILKET LAND HAR DU RITAT?
+   177 länders silhuetter ur Natural Earth, förberäknade till radiella
+   signaturer: största utbredning i var och en av 64 vinkelsektorer, skalad så
+   att största radien är 1. Din ritning får en signatur på samma sätt, och
+   jämförs med cosinuslikhet över alla 64 vridningar. Skalan spelar ingen roll,
+   orienteringen spelar ingen roll, och svaret är alltid fel.
+   ========================================================================== */
+const BINS = 64;
+let LANDER = null;
+fetch('lander.json').then(r => r.json()).then(d => { LANDER = d; })
+  .catch(() => console.warn('lander.json saknas — landmatchningen är av'));
+
+/* Signatur ur duken. Cellerna behåller dukens proportioner, så formen förvrängs
+   inte, och y vänds uppåt så att norr är upp precis som i landsdatan. */
+function dukSignatur(){
+  const SW = 192, SH = Math.max(8, Math.round(SW * H / W));
+  const o = document.createElement('canvas');
+  o.width = SW; o.height = SH;
+  const oc = o.getContext('2d', {willReadFrequently: true});
+  oc.drawImage(cv, 0, 0, SW, SH);
+  const d = oc.getImageData(0, 0, SW, SH).data;
+
+  const pts = [];
+  for(let y = 0; y < SH; y++) for(let x = 0; x < SW; x++){
+    if(d[(y * SW + x) * 4 + 3] > 24)
+      pts.push([(x + 0.5) * W / SW, H - (y + 0.5) * H / SH]);   // y uppåt
+  }
+  if(pts.length < 12) return null;
+
+  let mx = 0, my = 0;
+  for(const q of pts){ mx += q[0]; my += q[1]; }
+  mx /= pts.length; my /= pts.length;
+
+  let maxr = 0;
+  for(const q of pts) maxr = Math.max(maxr, Math.hypot(q[0] - mx, q[1] - my));
+  if(maxr < 1) return null;
+
+  const sig = new Float64Array(BINS);
+  for(const q of pts){
+    const dx = q[0] - mx, dy = q[1] - my;
+    const b = ((Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI) * BINS | 0) % BINS;
+    sig[b] = Math.max(sig[b], Math.hypot(dx, dy) / maxr);
+  }
+  return sig;
+}
+
+/* Cosinuslikhet, bästa värdet över alla cirkulära förskjutningar. */
+function jamfor(sig, c){
+  let na = 0; for(let i = 0; i < BINS; i++) na += sig[i] * sig[i];
+  let nb = 0; for(let i = 0; i < BINS; i++) nb += c.s[i] * c.s[i];
+  const norm = Math.sqrt(na * nb) || 1;
+  let best = -1, rot = 0;
+  for(let r = 0; r < BINS; r++){
+    let dot = 0;
+    for(let i = 0; i < BINS; i++) dot += sig[i] * c.s[(i + r) % BINS];
+    if(dot > best){ best = dot; rot = r; }
+  }
+  return {score: best / norm, rot};
+}
+
+async function matchaLand(){
+  if(!LANDER) return;
+  const sig = dukSignatur();
+  if(!sig) return;
+
+  const rank = LANDER.map(c => ({c, ...jamfor(sig, c)}))
+                     .sort((a, b) => b.score - a.score);
+  const bast = rank[0], tvaa = rank[1];
+  const grader = Math.round(bast.rot * 360 / BINS);
+
+  $('v-name').textContent = bast.c.n;
+  ritaSilhuett(bast.c, sig, bast.rot);
+
+  const rader = [
+    ['Likhet', visaLikhet(bast.score).toFixed(1) + ' %'],
+    ['Vriden', grader + '°'],
+    ['Näst bäst', `${tvaa.c.n}, ${visaLikhet(tvaa.score).toFixed(1)} %`],
+  ];
+  $('v-rows').innerHTML = rad(rader);
+  $('v-extract').style.display = 'none';
+  $('verdict').classList.add('on');
+
+  /* Wikipedias sammanfattning, gratis och nyckellös. Kortet står redan uppe, så
+     det här fyller bara på när svaret kommer. (restcountries.com vore snyggare
+     för yta och folkmängd, men den värden gick inte att nå härifrån.) */
+  try{
+    const r = await fetch('https://sv.wikipedia.org/api/rest_v1/page/summary/' +
+      encodeURIComponent(bast.c.n), {signal: AbortSignal.timeout(8000)});
+    const j = await r.json();
+    if(!j.extract) return;
+    const mening = j.extract.split(/(?<=\.)\s/)[0];
+    $('v-extract').textContent = mening;
+    $('v-extract').style.display = 'block';
+  }catch{ /* kortet duger ändå */ }
+}
+
+/* Cosinuslikhet mellan icke-negativa vektorer hamnar alltid mellan 0,9 och 1,
+   så den råa siffran skiljer inte på en cirkel och ett L. Det här är ren
+   fåfänga: samma ordning, men utspänd så att skillnaderna syns. */
+const visaLikhet = sc => Math.max(0, Math.min(99.9, (sc - 0.35) / 0.65 * 100));
+
+const rad = rows => rows
+  .map(([l, v]) => `<div class="row"><span class="lbl">${l}</span><span>${v}</span></div>`)
+  .join('');
+
+/* Landets kontur, vriden till det läge som matchade, med din egen signatur
+   ritad ovanpå som en polär polygon. Då syns det hur magert påståendet är. */
+function ritaSilhuett(c, sig, rot){
+  const k = $('v-shape'), g = k.getContext('2d');
+  const S = k.width, m = S / 2, sc = S * 0.42;
+  g.clearRect(0, 0, S, S);
+  const vrid = -rot * 2 * Math.PI / BINS;
+
+  g.save(); g.translate(m, m); g.rotate(vrid); g.scale(1, -1);   // y uppåt
+  g.beginPath();
+  for(let i = 0; i < c.o.length; i += 2){
+    const x = c.o[i] * sc, y = c.o[i + 1] * sc;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath();
+  g.fillStyle = 'rgba(122,229,130,.18)';
+  g.strokeStyle = '#7ae582'; g.lineWidth = 1.5;
+  g.fill(); g.stroke();
+  g.restore();
+
+  g.save(); g.translate(m, m); g.scale(1, -1);
+  g.beginPath();
+  for(let i = 0; i <= BINS; i++){
+    const a = (i % BINS) / BINS * 2 * Math.PI - Math.PI;
+    const r = sig[i % BINS] * sc;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 1.2;
+  g.setLineDash([4, 3]); g.stroke();
+  g.restore();
+}
+</script>
+</body>
+</html>

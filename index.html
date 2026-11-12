@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tangent — precisionspositionering utan pekdon</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c10; --fg:#e8ecf1; --dim:#7b8794;
+    --accent:#4ade80; --hot:#fbbf24; --line:#1e2633;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+    font-family:var(--mono);-webkit-font-smoothing:antialiased}
+  #map{position:absolute;inset:0}
+  #konfetti{position:absolute;inset:0;width:100%;height:100%;z-index:20;
+    pointer-events:none;display:block}
+  .maplibregl-ctrl-attrib{font-family:var(--mono);font-size:10px}
+
+  /* ---- statusrad överst ---- */
+  #status, #meter{opacity:0;transition:opacity .6s ease .25s}
+  #status.pa, #meter.pa{opacity:1}
+  #status{position:absolute;top:0;left:0;right:0;padding:18px 24px;z-index:8;
+    display:flex;align-items:baseline;gap:16px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(10,12,16,.92),rgba(10,12,16,0))}
+  #marke{font-size:13px;letter-spacing:.34em;font-weight:600;color:var(--fg)}
+  #marke::after{content:'';display:inline-block;width:1px;height:11px;margin-left:16px;
+    background:var(--line);vertical-align:-1px}
+  #phase{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+
+  /* ---- startskärmen ---- */
+  #start{position:absolute;inset:0;z-index:10;display:grid;place-items:center;
+    padding:40px 24px 220px;background:rgba(7,9,12,.82);backdrop-filter:blur(3px);
+    transition:opacity .7s ease}
+  #start.borta{opacity:0;pointer-events:none}
+  #start .ruta{width:100%;max-width:760px;text-align:center}
+  #start .logo{font-size:clamp(38px,7vw,74px);letter-spacing:.3em;font-weight:600;
+    margin-right:-.3em;line-height:1}
+  #start .slogan{margin-top:20px;font-size:13px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--accent)}
+  #start .punkter{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;
+    margin:52px 0 46px;text-align:left}
+  #start .punkter div{font-size:11.5px;line-height:1.75;color:var(--dim);
+    padding-top:16px;border-top:1px solid var(--line)}
+  #start .punkter b{display:block;font-weight:400;font-size:14px;color:var(--fg);
+    margin-bottom:7px;letter-spacing:.02em}
+  #start .cta{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg);
+    animation:andas 2.6s ease-in-out infinite}
+  @keyframes andas{0%,100%{opacity:.45}50%{opacity:1}}
+  #start .finstilt{margin-top:26px;font-size:9.5px;line-height:1.7;color:#49525f;
+    max-width:460px;margin-left:auto;margin-right:auto}
+  @media (max-width:720px){
+    #start .punkter{grid-template-columns:1fr;gap:18px;margin:34px 0 30px}
+  }
+  #coords{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  /* ---- intensitetsmätare ---- */
+  #meter{position:absolute;top:56px;left:24px;z-index:5;width:260px;pointer-events:none}
+  #meterbar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+  #meterfill{height:100%;width:0;background:var(--accent);transition:width .05s linear,background .2s}
+  #meterlabel{margin-top:6px;font-size:11px;color:var(--dim);display:flex;justify-content:space-between}
+
+  /* ---- tangentbords-HUD ---- */
+  #kb{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:12;
+    --u:26px;width:calc(22.5*var(--u));height:calc(6.5*var(--u));
+    background:rgba(10,12,16,.72);border:1px solid var(--line);border-radius:10px;
+    backdrop-filter:blur(12px);pointer-events:none}
+  .k{position:absolute;border:1px solid var(--line);border-radius:3px;
+    display:grid;place-items:center;font-size:8px;color:#3d4756;overflow:hidden}
+  .k.hit{animation:flash .55s ease-out}
+  @keyframes flash{
+    0%{background:var(--accent);color:#0a0c10;border-color:var(--accent);box-shadow:0 0 14px var(--accent)}
+    100%{background:transparent;color:#3d4756;border-color:var(--line);box-shadow:none}
+  }
+  #centroid{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;
+    background:var(--hot);box-shadow:0 0 18px var(--hot);opacity:0;transition:opacity .25s}
+
+  /* ---- domen ---- */
+  #verdict{position:absolute;top:92px;left:40px;z-index:6;
+    width:462px;max-height:calc(100vh - 280px);overflow:auto;padding:22px 24px;
+    background:rgba(10,12,16,.93);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:4px;backdrop-filter:blur(16px);
+    opacity:0;pointer-events:none;transition:opacity .4s}
+  #verdict.on{opacity:1}
+  #verdict h1{margin:0 0 3px;font-size:24px;letter-spacing:.04em}
+  #verdict .sub{color:var(--dim);font-size:11px;margin-bottom:14px;font-variant-numeric:tabular-nums}
+  #verdict .plats{font-size:17px;margin-bottom:2px}
+  #verdict .precision{font-size:10px;color:var(--dim);margin:9px 0 14px;
+    padding-bottom:12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+
+  #kort{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .kort{background:rgba(255,255,255,.028);border:1px solid var(--line);border-radius:4px;
+    padding:10px 12px 11px;min-height:66px}
+  .kort .etikett{font-size:8.5px;letter-spacing:.17em;text-transform:uppercase;
+    color:#5d6878;margin-bottom:7px}
+  .kort .varde{font-size:13px;line-height:1.35;color:var(--fg)}
+  .kort .under{font-size:10px;line-height:1.5;color:var(--dim);margin-top:4px}
+  .kort.bred{grid-column:1 / -1}
+  #foto .etikett{font-size:8.5px;letter-spacing:.17em;text-transform:uppercase;
+    color:#5d6878;margin-bottom:8px;text-shadow:0 0 10px var(--bg)}
+  #verdict .foot{margin-top:14px;font-size:9.5px;color:#4a5564;line-height:1.55}
+
+  /* Bilden är det enda på skärmen som gör platsen till en plats i stället för
+     en tabellrad, så den får ta ordentligt med utrymme. */
+  #foto{position:absolute;top:92px;right:40px;z-index:6;
+    width:min(430px, calc(100vw - 580px));
+    opacity:0;pointer-events:none;transition:opacity .5s}
+  @media (max-width:760px){ #foto{display:none} }
+  #foto.on{opacity:1}
+  #foto-ram{position:relative;width:100%;aspect-ratio:4/3;border-radius:4px;overflow:hidden;
+    background:rgba(10,12,16,.93);border:1px solid var(--line);
+    display:grid;place-items:center}
+  #foto-ram img{width:100%;height:100%;object-fit:cover;display:block}
+  #foto-vantar{font-size:11px;color:var(--dim);letter-spacing:.08em;padding:20px;text-align:center}
+  #foto-text{margin-top:10px;font-size:10px;color:var(--dim);line-height:1.65;
+    text-shadow:0 0 10px var(--bg)}
+  #foto-text b{color:var(--fg);font-weight:400}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="konfetti"></canvas>
+
+<div id="status">
+  <div id="marke">TANGENT</div>
+  <div id="phase">lägg händerna på tangentbordet</div>
+  <div id="coords">—</div>
+</div>
+
+<div id="start">
+  <div class="ruta">
+    <div class="logo">TANGENT</div>
+    <div class="slogan">Precisionspositionering utan pekdon</div>
+
+    <div class="punkter">
+      <div><b>149 miljoner km²</b>Hela jordens landyta, tillgänglig från första svepet.
+        Inga områden låsta bakom en uppgradering.</div>
+      <div><b>Nio öppna källor</b>Karta, väder, höjd, luft, foto, arter, seismik, musik
+        och uppslagsverk. Inga nycklar, inga konton, inga spårare.</div>
+      <div><b>Noll inlärningstid</b>Inga kommandon att memorera, inga genvägar att slå upp.
+        Lägg händerna på tangentbordet.</div>
+    </div>
+
+    <div class="cta">Lägg händerna på tangentbordet för att börja</div>
+    <div class="finstilt">Positionen härleds ur tangenttryckens fysiska tyngdpunkt.
+      Metoden är reproducerbar och saknar samband med din faktiska belägenhet.</div>
+  </div>
+</div>
+
+<div id="meter">
+  <div id="meterbar"><div id="meterfill"></div></div>
+  <div id="meterlabel"><span>intensitet</span><span id="meterval">0.0</span></div>
+</div>
+
+<div id="kb"><div id="centroid"></div></div>
+
+<div id="foto">
+  <div class="etikett">bild från platsen</div>
+  <div id="foto-ram"><div id="foto-vantar">letar efter en bild …</div></div>
+  <div id="foto-text"></div>
+</div>
+
+<div id="verdict">
+  <h1>DU ÄR HÄR</h1>
+  <div class="plats" id="v-plats">—</div>
+  <div class="sub" id="v-coords"></div>
+  <div class="precision" id="v-precision"></div>
+  <div id="kort"></div>
+  <div class="foot">Haven är bortvridna ur projektionen, så varje tangent är land.
+    Tryck på valfri tangent för att hamna någon annanstans.</div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+/* ==========================================================================
+   TANGENTBORDSPOSITIONERAREN
+   Tangentbordets fysiska geometri projiceras på jordklotet. Du sveper över
+   tangenterna; tyngdpunkten av det du rör vid blir en koordinat.
+   ========================================================================== */
+
+/* --- 1. Fysisk layout: [code, x, y, bredd] i tangentenheter (1u = en tangent) --- */
+const KB_W = 22.5, KB_H = 6.5;
+const KEYS = [
+  ['Escape',0,0,1],['F1',2,0,1],['F2',3,0,1],['F3',4,0,1],['F4',5,0,1],
+  ['F5',6.5,0,1],['F6',7.5,0,1],['F7',8.5,0,1],['F8',9.5,0,1],
+  ['F9',11,0,1],['F10',12,0,1],['F11',13,0,1],['F12',14,0,1],
+  ['PrintScreen',15.25,0,1],['ScrollLock',16.25,0,1],['Pause',17.25,0,1],
+
+  ['Backquote',0,1.5,1],['Digit1',1,1.5,1],['Digit2',2,1.5,1],['Digit3',3,1.5,1],
+  ['Digit4',4,1.5,1],['Digit5',5,1.5,1],['Digit6',6,1.5,1],['Digit7',7,1.5,1],
+  ['Digit8',8,1.5,1],['Digit9',9,1.5,1],['Digit0',10,1.5,1],['Minus',11,1.5,1],
+  ['Equal',12,1.5,1],['Backspace',13,1.5,2],
+  ['Insert',15.25,1.5,1],['Home',16.25,1.5,1],['PageUp',17.25,1.5,1],
+  ['NumLock',18.5,1.5,1],['NumpadDivide',19.5,1.5,1],['NumpadMultiply',20.5,1.5,1],['NumpadSubtract',21.5,1.5,1],
+
+  ['Tab',0,2.5,1.5],['KeyQ',1.5,2.5,1],['KeyW',2.5,2.5,1],['KeyE',3.5,2.5,1],
+  ['KeyR',4.5,2.5,1],['KeyT',5.5,2.5,1],['KeyY',6.5,2.5,1],['KeyU',7.5,2.5,1],
+  ['KeyI',8.5,2.5,1],['KeyO',9.5,2.5,1],['KeyP',10.5,2.5,1],
+  ['BracketLeft',11.5,2.5,1],['BracketRight',12.5,2.5,1],['Backslash',13.5,2.5,1.5],
+  ['Delete',15.25,2.5,1],['End',16.25,2.5,1],['PageDown',17.25,2.5,1],
+  ['Numpad7',18.5,2.5,1],['Numpad8',19.5,2.5,1],['Numpad9',20.5,2.5,1],['NumpadAdd',21.5,2.5,1],
+
+  ['CapsLock',0,3.5,1.75],['KeyA',1.75,3.5,1],['KeyS',2.75,3.5,1],['KeyD',3.75,3.5,1],
+  ['KeyF',4.75,3.5,1],['KeyG',5.75,3.5,1],['KeyH',6.75,3.5,1],['KeyJ',7.75,3.5,1],
+  ['KeyK',8.75,3.5,1],['KeyL',9.75,3.5,1],['Semicolon',10.75,3.5,1],['Quote',11.75,3.5,1],
+  ['Enter',12.75,3.5,2.25],
+  ['Numpad4',18.5,3.5,1],['Numpad5',19.5,3.5,1],['Numpad6',20.5,3.5,1],
+
+  ['ShiftLeft',0,4.5,2.25],['KeyZ',2.25,4.5,1],['KeyX',3.25,4.5,1],['KeyC',4.25,4.5,1],
+  ['KeyV',5.25,4.5,1],['KeyB',6.25,4.5,1],['KeyN',7.25,4.5,1],['KeyM',8.25,4.5,1],
+  ['Comma',9.25,4.5,1],['Period',10.25,4.5,1],['Slash',11.25,4.5,1],['ShiftRight',12.25,4.5,2.75],
+  ['ArrowUp',16.25,4.5,1],
+  ['Numpad1',18.5,4.5,1],['Numpad2',19.5,4.5,1],['Numpad3',20.5,4.5,1],['NumpadEnter',21.5,4.5,1],
+
+  ['ControlLeft',0,5.5,1.25],['MetaLeft',1.25,5.5,1.25],['AltLeft',2.5,5.5,1.25],
+  ['Space',3.75,5.5,6.25],['AltRight',10,5.5,1.25],['MetaRight',11.25,5.5,1.25],
+  ['ContextMenu',12.5,5.5,1.25],['ControlRight',13.75,5.5,1.25],
+  ['ArrowLeft',15.25,5.5,1],['ArrowDown',16.25,5.5,1],['ArrowRight',17.25,5.5,1],
+  ['Numpad0',18.5,5.5,2],['NumpadDecimal',20.5,5.5,1],
+];
+
+/* code -> tyngdpunkt i tangentenheter */
+/* Ett laptoptangentbord saknar numeriskt block och navigationsklump, men
+   bokstavsblocket har samma mått. Webbplattformen kan inte berätta vilket
+   tangentbord som sitter i — getLayoutMap ger bara vilket tecken varje fysisk
+   tangent ger, aldrig geometrin — så valet får ske i adressen: ?kb=laptop */
+const LAYOUT = new URLSearchParams(location.search).get('kb') === 'laptop' ? 'laptop' : 'full';
+const ALLA_KEYS = KEYS;
+const AKTIVA_KEYS = LAYOUT === 'laptop'
+  ? ALLA_KEYS.filter(([c, x, y, w]) => x + w <= 15.3)
+  : ALLA_KEYS;
+const KB_BREDD = LAYOUT === 'laptop' ? 15 : KB_W;
+
+const POS = new Map(AKTIVA_KEYS.map(([c,x,y,w]) => [c, {x: x + w/2, y: y + 0.5}]));
+
+/* --- 1b. Landmasken ------------------------------------------------------
+   Två tredjedelar av jordklotet är hav, och ett tangentbord där de flesta
+   tangenterna är Stilla havet är inget vidare tangentbord. Natural Earth 110m,
+   rastrerad till 360 x 180 rutor och packad till bitar.                    */
+const COLS = 360, ROWS = 180;
+const MASK_B64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADf//8AAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB////D//////n/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gf/x////////wAAAAAbgAAB4AAAAAAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAf//8A///////+AAAAB/ngAAAAAAAAAAH8AAAAAAAAAAAAAAAAAAAAAAAAcH3Hv/5////////8AAAAA/gAAAAAAAAAAAAD4AAAAAAAAAAAAAAAAAAAAAAcIAAQP/AH///////+AAAAAPCAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAADwDAc+f+AP///////4AAAAAAAAAAAAAB4AAAAB/8AAAAAAAAAAAAAAAAAAAAAH9wc374AAAf/////8AAAAAAAAAAAAH4AAAA////AAAB/gAAAAAAAAAAAAAAAAwAAA/QAAAH/////8AAAAAAAAAAAAOAAAAP///wAAAAAAAAAAAAAAAAAAAAP8AYe+c3AAAD/////4AAAAAAAAAAAA4AAAH////++HgAOAAAAAAAAAAAAAAAfv+4+w/4gAAB/////wAAAAAAAAAAADwAHgH///////4AfgAAAAAAAAAAAAAAPf/4O4//9AAB/////wAAAAAAAAAAADwAPb////////4m//gAAAAAAAf+AAAAAA/+A8f//4AB////8gAAAAAAA/gAAAAAfv/////////////8AAAAAB///+H//H/+PeDwf+AA3////AAAAAAA//4AAAA8fv///////////////P8AAf////////A4CPz4H8AAP///wAAAAAAD///wADH/n3/////////////////cAD////////////34Z/wA///4AAAAAAAP///+M////n/////////////////e4E/////////////gD/8Af//gAAAAAAAf//5+P////f/////////////////fw/////////////6AD8YAf/wAAf8AAAA/8f+D///////////////////////AgEf///////////zw7/AAP/gAAP4AAAB/4/+f//////////////////////8AMAf//////////+DIA/gAH/gAAAAAAAH/z/////////////////////////+AAH///////////8AwgOAAD+AAAAAAAA//H/////////////////////////6AAP///////////wAA/AAAB+AAAAAAAB/+H//////////////////////nP+AAAH//z////////wAA/wAAAOAAAAAAAB//D/////////////////////+A/4AAAA/zAD///////gAA/4wAAAAAAAAAAB//Ab///////////////////+eDgAAAAABwAA///////4AA/94AAAAAAAAAYA5+A///////////////////4AAHAAAAAADcAAD//////4AAf/8AAAAAAAAA8AC+C///////////////////wAAfgAAAAAMAAAA///////wAf/8AAAAAAAAA4AO8H///////////////////AAA/gAAAABgAAAA///////8A///AAAAAAAAA8ANwH//////////////////8AAB/AAAAAEAAAAAf///////z///4AAAAAAAHOAEDv//////////////////+AAA+AAAAAAAAAABH///////x///8AAAAAAAHHAf/////////////////////6AA8AAAAAAAAAAAD///////x///8AAAAAAAGPz//////////////////////6AAwAAAAAAAAAAAD///////9///6AAAAAAAAPj//////////////////////6AAQAAAAAAAAAAAC///////////MAAAAAAAAYf//////////////////////7AAAAAAAAAAAAAABv////////+MNAAAAAAAAD///////////////////////zAAAAAAAAAAAAAAAH////////7gfgAAAAAAAf///////////////////////yAAAAAAAAAAAAAAAL/////////gCgAAAAAAAH///////////////////////iAAAAAAAAAAAAAAAP/////////pAAAAAAAAAD/////uP/x//////////////DAAAAAAAAAAAAAAAP/////////+AAAAAAAAAB//v//Gf/B/////////////+AAAAAAAAAAAAAAAAP////////8wAAAAAAAAAB//H/+AP+P/////////////8CAAAAAAAAAAAAAAAP////////wAAAAAAAAADj/jz/8AD/H/////////////4HgAAAAAAAAAAAAAAP////////gAAAAAAAAAH/4Bw/8AA/B////////////+APAAAAAAAAAAAAAAAP////////gAAAAAAAAAH/wA8f8Ph/g////////////8AAAAAAAAAAAAAAAAAP///////8AAAAAAAAAAH/gMHfJ///x///////////v4AMAAAAAAAAAAAAAAAP///////8AAAAAAAAAAH/AMCOP///h//////////+JwAMAAAAAAAAAAAAAAAH///////4AAAAAAAAAAH/AAAHH///g//////////8BwAIAAAAAAAAAAAAAAAH///////wAAAAAAAAAAH+AAYGH///w//////////+w4A4AAAAAAAAAAAAAAAD///////wAAAAAAAAAAAgf+ACBs//////////////g4D4AAAAAAAAAAAAAAAB///////wAAAAAAAAAAAj/+AAAA//////////////AYf4AAAAAAAAAAAAAAAA///////gAAAAAAAAAAB//8AAAA//////////////Ah2AAAAAAAAAAAAAAAAAP/////+AAAAAAAAAAAD//+AAAB//////////////gDwAAAAAAAAAAAAAAAAAH/////8AAAAAAAAAAAH///4GAB//////////////gDAAAAAAAAAAAAAAAAAAG/////4AAAAAAAAAAAP///8P4h//////////////wCAAAAAAAAAAAAAAAAAACf////4AAAAAAAAAAAP////v////////////////gAAAAAAAAAAAAAAAAAAABP//hgYAAAAAAAAAAAP//////3//P///////////wAAAAAAAAAAAAAAAAAAAAv//AAYAAAAAAAAAAAf//////9//H///////////wAAAAAAAAAAAAAAAAAAAB3/+AAcAAAAAAAAAAB///////4//h///////////gAAAAAAAAAAAAAAAAAAAAR/+AANAAAAAAAAAAD///////8//wH//////////AAAAAAAAAAAAAAAAAAAAAJ/+AAEAAAAAAAAAAH///////+f/0B/////////+AAAAAAAAAAAAAAAAAAAAAI/8AAAAAAAAAAAAAH///////+f/44Af///////+QAAAAAAAAAAAAAAAAAAAAAf8AAAAAAAAAAAAAP////////H//+AP///////4gAAAAAAAAAAAAAAAAAAAAAP8AAuAAAAAAAAAAP////////H///AD///v///ggAAAAAAAAAAAAAAAAAAAAAH+AABgAAAAAAAAAf////////n//+AD//4P//YAAAAAAAAAAAAAAAAAAAAAAAP+A4AYAAAAAAAAAP////////j//+AAf/4H/+AAAAAAAAAAAAAAAAgAAAAAAAH/B4ABwAAAAAAAAP////////h//8AAf/gD/8YAAAAAAAAAAAAAAAAAAAAAAAD/nwAD9AAAAAAAAP////////x//4AAf/AD/8QAAAAAAAAAAAAAAAAAAAAAAAAf/wAAAAAAAAAAAP////////4//gAAf+AD/+AAwAAAAAAAAAAAAAAAAAAAAAAH/wAAAAAAAAAAAf////////4f+AAAf8AD//AAwAAAAAAAAAAAAAAAAAAAAAAAH/AAAAAAAAAAAf////////8f8AAAPwAAP/gAwAAAAAAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAf////////+fgAAAPwAAP/gAwAAAAAAAAAAAAAAAAAAAAAAAA/AAAAAAAAAAAf/////////eAAAAHwAAP/gAMAAAAAAAAAAAAAAAAAAAAAAAAHgAAAAAAAAAAf/////////gAAAAHwAAM/gACAAAAAAAAAAAAAAAAAAAAAAAADABAAAAAAAAAP/////////gYAAADwAAEfgAJAAAAAAAAAAAAAAAAAAAAAAAADgPfKAAAAAAAH/////////34AAADwAAIOABAAAAAAAAAAAAAAAAAAAAAAAAAAyPf+AAAAAAAD//////////4AAADoAAIEACBAAAAAAAAAAAAAAAAAAAAAAAAA8///AAAAAAAB//////////wAAABIAAMAAAFAAAAAAAAAAAAAAAAAAAAAAAAAE///gAAAAAAB//////////wAAAAMAAEAAALgAAAAAAAAAAAAAAAAAAAAAAAAAf//wAAAAAAAf/////////gAAAAMAADAAMCAAAAAAAAAAAAAAAAAAAAAAAAAA////gAAAAAAP/B///////gAAAAAAADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAACAA///////AAAAAAAAxgA+AAAAAAAAAAAAAAAAAAAAAAAAAAAf///4AAAAAAAAAD/////+AAAAAAAAZgB4AAAAAAAAAAAAAAAAAAAAAAAAAAB////4AAAAAAAAAD/////8AAAAAAAAMwH8AAAAAAAAAAAAAAAAAAAAAAAAAAB////8AAAAAAAAAH/////4AAAAAAAAHQf8AIAAAAAAAAAAAAAAAAAAAAAAAAD////8AAAAAAAAAH/////gAAAAAAAAHgf88IAAAAAAAAAAAAAAAAAAAAAAAAD////+AAAAAAAAAH/////AAAAAAAAADwf8AAgAAAAAAAAAAAAAAAAAAAAAAAH/////4AAAAAAAAH/////AAAAAAAAABwP5wBwAAAAAAAAAAAAAAAAAAAAAAAH/////6AAAAAAAAD////+AAAAAAAAAB8P5wATwAAAAAAAAAAAAAAAAAAAAAAD//////4AAAAAAAB////8AAAAAAAAAA8AxQif+AAAAAAAAAAAAAAAAAAAAAAH//////8AAAAAAAB////4AAAAAAAAAAcAAIAD/gAAAAAAAAAAAAAAAAAAAAAH///////gAAAAAAA////4AAAAAAAAAAMAAIAI/ywAAAAAAAAAAAAAAAAAAAAH///////gAAAAAAA////4AAAAAAAAAADgAAAI/8BAAAAAAAAAAAAAAAAAAAAD///////gAAAAAAAf///4AAAAAAAAAAB+AAAA/4AIAAAAAAAAAAAAAAAAAAAB///////gAAAAAAAf///4AAAAAAAAAAAAmogAOMAAAAAAAAAAAAAAAAAAAAAB///////AAAAAAAAf///8AAAAAAAAAAAABCAAAGADAAAAAAAAAAAAAAAAAAAA///////AAAAAAAAf///8AAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAf/////+AAAAAAAAP///8AAAAAAAAAAAAAAAgCAAAAAAAAAAAAAAAAAAAAAAAf/////8AAAAAAAAf///+AQAAAAAAAAAAAAB+CAAAAAAAAAAAAAAAAAAAAAAAP/////4AAAAAAAAf///+AQAAAAAAAAAAAAD8DAAAAAAAAAAAAAAAAAAAAAAAP/////4AAAAAAAA////+AwAAAAAAAAAAAA38DgAAAAAAAAAAAAAAAAAAAAAAH/////4AAAAAAAA////8BwAAAAAAAAAAAD/8DgAAAAAAAAAAAAAAAAAAAAAAB/////4AAAAAAAA////8PwAAAAAAAAAAAD//HwAABABAAAAAAAAAAAAAAAAAAf////4AAAAAAAA////wPgAAAAAAAAAAAP//3wAAAACAAAAAAAAAAAAAAAAAAP////wAAAAAAAA////APgAAAAAAAAAAAP///wAAAAAAAAAAAAAAAAAAAAAAAP////wAAAAAAAAf//+APgAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAAAAAAAAP////wAAAAAAAAf//+APgAAAAAAAAAAD////+AAIAAAAAAAAAAAAAAAAAAAAP////gAAAAAAAAP//+AfAAAAAAAAAAAf////+AAEAAAAAAAAAAAAAAAAAAAAP////AAAAAAAAAP///AfAAAAAAAAAAA//////AAAAAAAAAAAAAAAAAAAAAAAP///4AAAAAAAAAP//+APAAAAAAAAAAA//////gAAAAAAAAAAAAAAAAAAAAAAf///gAAAAAAAAAH//+AOAAAAAAAAAAB//////wAAAAAAAAAAAAAAAAAAAAAAf///AAAAAAAAAAH//4AEAAAAAAAAAAA//////4AAAAAAAAAAAAAAAAAAAAAAf//+AAAAAAAAAAH//4AAAAAAAAAAAAB//////4AAAAAAAAAAAAAAAAAAAAAAf//+AAAAAAAAAAH//4AAAAAAAAAAAAA//////4AAAAAAAAAAAAAAAAAAAAAAf//+AAAAAAAAAAD//wAAAAAAAAAAAAAf/////8AAAAAAAAAAAAAAAAAAAAAAf//8AAAAAAAAAAB//gAAAAAAAAAAAAAf/////4AAAAAAAAAAAAAAAAAAAAAA///8AAAAAAAAAAB//gAAAAAAAAAAAAAf/////4AAAAAAAAAAAAAAAAAAAAAA///4AAAAAAAAAAA//AAAAAAAAAAAAAAP/////4AAAAAAAAAAAAAAAAAAAAAAf//wAAAAAAAAAAA/+AAAAAAAAAAAAAAP/AP//wAAAAAAAAAAAAAAAAAAAAAA///gAAAAAAAAAAA/4AAAAAAAAAAAAAAf8AG//gAAAAAAAAAAAAAAAAAAAAAA//3AAAAAAAAAAAAYAAAAAAAAAAAAAAAOAAF//gAAAAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//AAABAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAAAgAAAAAAAAAAAAAAAAAD//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAAAQAAAAAAAAAAAAAAAAAB//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYAAAAcAAAAAAAAAAAAAAAAAB/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcAAADQAAAAAAAAAAAAAAAAAD/4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcAAAHAAAAAAAAAAAAAAAAAAB/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAOAAAAAAAAAAAAAAAAAAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4AAAAAAAAAAAAAAAAAAH+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAH/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH4AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAABwAAAAAAAAAAAAAAAAAAH4AAAAAAB4HgAD8AAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAA//AAAD//////////wAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAf///4Af///////////AAAAAAAAAAAAAAAAAAAAAAAz4AAAAAAAAAAAAAAAPz////8B/////////////wAAAAAAAAAAAAAAAAAAAAA78AAAAAAAAAAA8/8///////wf/////////////+AAAAAAAAAAAAAAAAAAAAH9+AAAAAAAAZ////////////w////////////////4AAAAAAAAAAAAAAAAAAAB+AAAAAAAB//////////////////////////////4AAAAAAAAABmAAB8f+HB/+AAAAAAAP//////////////////////////////gAAAAAAAAP/c/oAf/////4AAAAAAAP/////////////////////////////8AAAAAAAD/////////////gAAAAAAB//////////////////////////////wAAAAAAAD////////////wAAAAAAP///////////////////////////////wAAAAAD/////////////4AAAAAAD////////////////////////////////wAAAADh/////////////AAAAB8A/////////////////////////////////+AAAAA4Af///////////gAAAH+AA///////////////////////////////+AAAAAAAAH///////////+A/A/wAA///////////////////////////////8AAAAAAAf//////////////gAAAf////////////////////////////////+AAAAAAAH///////////////h////////////////////////////////////wAAAAAAP/////////////////////////////////////////////////////gAe/gAAH/////////////////////////////////////////////////////8f////v//////////////////////////////////////////////////////f///////////////////////////////////////////////////////////f///////////////////////////////////////////////////////////f///////////////////////////////////////////////////////////f///////////////////////////////////////////////////////////';
+const LAND = (() => {
+  const bin = atob(MASK_B64), a = new Uint8Array(COLS * ROWS);
+  for(let k = 0; k < a.length; k++) a[k] = (bin.charCodeAt(k >> 3) >> (7 - (k & 7))) & 1;
+  return a;
+})();
+
+/* Tangentbordsprojektionen: inverterad fördelningsfunktion över landarean,
+   först per längdgrad och sedan per breddgrad inom vald längdgrad. Resultatet
+   är en bijektion från tangentbordet till jordens land — haven är helt
+   bortvridna, så varje tangent är land. Fortfarande monotont: höger är öster,
+   upp är norr. Stilla havet har krympt till ingenting, Eurasien har brett ut
+   sig över halva bokstavsblocket.                                          */
+const lonCum = new Float64Array(COLS + 1);
+const latCum = new Float64Array(ROWS + 1);
+(function buildCDF(){
+  const colW = new Float64Array(COLS), rowW = new Float64Array(ROWS);
+  for(let j = 0; j < ROWS; j++){
+    /* Vikta med cos(lat): en ruta på 1° x 1° vid 80:e breddgraden är en sjättedel
+       så stor som en vid ekvatorn. Utan det blir Antarktis och Sibirien enormt
+       övervärderade och halva tangentbordet är is. */
+    const w = Math.cos((90 - j - 0.5) * Math.PI / 180);
+    for(let i = 0; i < COLS; i++)
+      if(LAND[j * COLS + i]){ colW[i] += w; rowW[j] += w; }
+  }
+  let a = 0; for(let i = 0; i < COLS; i++){ a += colW[i]; lonCum[i + 1] = a; }
+  for(let i = 0; i <= COLS; i++) lonCum[i] /= a;
+  let b = 0; for(let j = 0; j < ROWS; j++){ b += rowW[j]; latCum[j + 1] = b; }
+  for(let j = 0; j <= ROWS; j++) latCum[j] /= b;
+})();
+
+function invCum(cum, u, n){
+  let lo = 0, hi = n;
+  while(hi - lo > 1){ const mid = (lo + hi) >> 1; if(cum[mid] <= u) lo = mid; else hi = mid; }
+  const a = cum[lo], b = cum[lo + 1];
+  return lo + (b > a ? (u - a) / (b - a) : 0);
+}
+
+/* Fördelningarna är globala och oberoende: en tangentrad betyder samma breddgrad
+   över hela tangentbordet, en tangentkolumn samma längdgrad. Priset är att paret
+   (lon, lat) ibland pekar i vatten — då kliver vi till närmaste landruta. */
+function snapToLand(lon, lat){
+  let i = Math.max(0, Math.min(COLS - 1, Math.floor(lon + 180)));
+  let j = Math.max(0, Math.min(ROWS - 1, Math.floor(90 - lat)));
+  if(LAND[j * COLS + i]) return [lon, lat];
+  const cosL = Math.cos(lat * Math.PI / 180);
+  for(let r = 1; r < ROWS; r++){
+    let best = null, bd = Infinity;
+    for(let dj = -r; dj <= r; dj++){
+      for(let di = -r; di <= r; di++){
+        if(Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;   // bara ringens kant
+        const jj = j + dj; if(jj < 0 || jj >= ROWS) continue;
+        const ii = ((i + di) % COLS + COLS) % COLS;                // varva vid datumgränsen
+        if(!LAND[jj * COLS + ii]) continue;
+        const clon = -180 + ii + 0.5, clat = 90 - jj - 0.5;
+        let dlon = clon - lon;
+        if(dlon > 180) dlon -= 360; else if(dlon < -180) dlon += 360;
+        const d = (dlon * cosL) ** 2 + (clat - lat) ** 2;
+        if(d < bd){ bd = d; best = [clon, clat]; }
+      }
+    }
+    /* Kliv en bit tillbaka mot ursprungspunkten så att resultatet inte blir en
+       rutmittpunkt på exakt .5000 grader. Håll steget under rutans halva bredd
+       så att vi stannar kvar på land. Deterministiskt: samma tangent, samma plats. */
+    if(best){
+      let dlon = lon - best[0];
+      if(dlon > 180) dlon -= 360; else if(dlon < -180) dlon += 360;
+      const dlat = lat - best[1], len = Math.hypot(dlon, dlat) || 1;
+      const step = Math.min(0.35, len) / len;
+      return [best[0] + dlon * step, best[1] + dlat * step];
+    }
+  }
+  return [lon, lat];
+}
+
+/* macOS äter F1–F12 när "Use F1, F2, etc. keys as standard function keys" är av:
+   de blir ljusstyrka och medieknappar och skickar aldrig någon tangenthändelse
+   till sidan. Då är översta raden död och projektionen får ett hål i norr.
+   Med false spänns breddgraderna över sifferraden till bottenraden istället,
+   så alla fem användbara rader får varsitt band. Sätt true om du vrålat
+   `defaults write -g com.apple.keyboard.fnState -bool true` och loggat om. */
+const FN_ROW_WORKS = false;
+
+/* Tangenternas tyngdpunkter spänner 0,5..22,0 i sidled. I höjdled räknar vi
+   bara med de rader som faktiskt skickar något. */
+const ANVANDBARA = AKTIVA_KEYS.filter(([c, x, y]) => FN_ROW_WORKS || y > 0);
+const X0 = Math.min(...ANVANDBARA.map(([c, x, y, w]) => x + w / 2));
+const X1 = Math.max(...ANVANDBARA.map(([c, x, y, w]) => x + w / 2));
+const Y0 = Math.min(...ANVANDBARA.map(([c, x, y]) => y + 0.5));
+const Y1 = Math.max(...ANVANDBARA.map(([c, x, y]) => y + 0.5));
+const clamp01 = t => Math.max(0, Math.min(0.999999, t));
+
+/* Trimma bort fördelningarnas yttersta svansar, annars är översta raden Nordpolen
+   och nedersta raden Sydpolen — två bortkastade rader. Antarktis är ungefär nio
+   procent av jordens land och ligger längst ned i fördelningen, så P_HI strax
+   under 0,91 kastar ut isen och ger nedersta raden Australien och Patagonien
+   istället. Höj till 0,98 om du hellre vill kunna hamna på Sydpolen. */
+const P_LO = 0.03, P_HI = 0.90;
+const band = t => P_LO + t * (P_HI - P_LO);
+
+/* ?raw i adressen ger den råa, ovridna projektionen (två tredjedelar hav). */
+const RAW = new URLSearchParams(location.search).has('raw');
+
+function toLngLat(x, y){
+  const u = clamp01((x - X0) / (X1 - X0));
+  const v = clamp01((y - Y0) / (Y1 - Y0));
+  if(RAW) return [u * 360 - 180, 90 - v * 180];
+  return snapToLand(-180 + invCum(lonCum, band(u), COLS),
+                     90 - invCum(latCum, band(v), ROWS));
+}
+
+/* --- 2. Kartan ---------------------------------------------------------- */
+/* BYT TILL MAPBOX: ladda mapbox-gl istället för maplibre-gl, sätt
+   mapboxgl.accessToken = 'pk...' och style: 'mapbox://styles/mapbox/dark-v11'.
+   Resten av koden är oförändrad — API:erna är kompatibla. */
+const map = new maplibregl.Map({
+  container: 'map',
+  /* CARTO lade om sin vektorstil (källan heter numera protomaps) och MapLibre
+     blir inte klar med den — 'load' avfyras aldrig och kartan förblir svart.
+     Rasterkakel behöver varken glyfer eller spritar och laddar direkt. */
+  style: {
+    version: 8,
+    sources: {bas: {
+      /* CARTO kräver numera nyckel även för rastret — utan den kommer kakel
+         med "API KEY REQUIRED" tryckt över. Esris mörka bakgrundskarta är
+         nyckellös. Observera ordningen: ArcGIS har rad före kolumn. */
+      type: 'raster', tileSize: 256,
+      tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/' +
+              'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'],
+      attribution: '© Esri, © OpenStreetMap contributors',
+    }},
+    layers: [{id: 'bakgrund', type: 'background', paint: {'background-color': '#0a0c10'}},
+             {id: 'bas', type: 'raster', source: 'bas'}],
+  },
+  center: [0, 20], zoom: 1.4, attributionControl: {compact: true},
+  interactive: false
+});
+
+const liveEl = document.createElement('div');
+const liveDot = document.createElement('div');
+liveDot.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#fbbf24;' +
+  'box-shadow:0 0 22px #fbbf24;opacity:0;transition:opacity .3s';
+liveEl.appendChild(liveDot);
+const liveMarker = new maplibregl.Marker({element: liveEl}).setLngLat([0,0]).addTo(map);
+
+let pinMarker = null;
+
+let mapReady = false;
+
+map.on('load', () => {
+  mapReady = true;
+  map.addSource('trail', {type:'geojson', data: line([])});
+  map.addLayer({id:'trail', type:'line', source:'trail',
+    paint:{'line-color':'#fbbf24','line-width':2,'line-opacity':.55,'line-blur':1}});
+  map.addSource('circle', {type:'geojson', data: {type:'FeatureCollection', features:[]}});
+  map.addLayer({id:'circle-fill', type:'fill', source:'circle',
+    paint:{'fill-color':'#4ade80','fill-opacity':.1}});
+  map.addLayer({id:'circle-line', type:'line', source:'circle',
+    paint:{'line-color':'#4ade80','line-width':1.5,'line-dasharray':[3,2]}});
+});
+
+const line = coords => ({type:'Feature', geometry:{type:'LineString', coordinates:coords}});
+
+function circlePoly(lat, lon, radiusM){
+  const R = 6371000, pts = [], d = radiusM / R;
+  const la = lat*Math.PI/180, lo = lon*Math.PI/180;
+  for(let i=0;i<=72;i++){
+    const b = i/72 * 2*Math.PI;
+    const la2 = Math.asin(Math.sin(la)*Math.cos(d) + Math.cos(la)*Math.sin(d)*Math.cos(b));
+    const lo2 = lo + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),
+                                Math.cos(d) - Math.sin(la)*Math.sin(la2));
+    pts.push([lo2*180/Math.PI, la2*180/Math.PI]);
+  }
+  return {type:'FeatureCollection', features:[{type:'Feature', geometry:{type:'Polygon', coordinates:[pts]}}]};
+}
+
+/* --- 3. Tangentbords-HUD ------------------------------------------------ */
+const kb = document.getElementById('kb');
+const centroidDot = document.getElementById('centroid');
+const keyEls = new Map();
+kb.style.width = `calc(${KB_BREDD} * var(--u))`;
+const label = c => c
+  .replace(/^Key|^Digit/,'').replace(/^Numpad/,'#').replace(/^Arrow/,'')
+  .replace('Left','L').replace('Right','R').slice(0,5);
+
+for(const [code,x,y,w] of AKTIVA_KEYS){
+  const el = document.createElement('div');
+  el.className = 'k';
+  el.style.left   = `calc(${x} * var(--u) + 2px)`;
+  el.style.top    = `calc(${y} * var(--u) + 2px)`;
+  el.style.width  = `calc(${w} * var(--u) - 4px)`;
+  el.style.height = 'calc(1 * var(--u) - 4px)';
+  el.textContent = label(code);
+  if(!FN_ROW_WORKS && /^F\d+$/.test(code)) el.style.opacity = '.22';   // äts av macOS
+  kb.appendChild(el);
+  keyEls.set(code, el);
+}
+
+/* --- 4. Inmatningsmotorn ------------------------------------------------
+   6-key rollover gör att "hur många hålls nere" toppar vid 6. Därför mäter vi
+   rörelse: färska nedslag per tick, med exponentiell avklingning. Ett litet
+   bidrag från hållna tangenter ger en botten åt statiska tryck.           */
+
+const down = new Set();
+let intensity = 0, peak = 0;
+let hits = 0, hitX = 0, hitY = 0, hitN = 0;   // ackumuleras mellan tick
+let sx = 0, sy = 0, sw = 0;                   // avklingande viktade summor
+let phase = 'idle';                            // idle | live | locked
+let calmTicks = 0;
+let trail = [];
+let roundId = 0;
+
+const DECAY_I = 0.90;   // avklingning för intensitet
+const DECAY_C = 0.80;   // avklingning för tyngdpunkt
+const HELD_W  = 0.12;   // vikt per hållen tangent och tick
+const WAKE    = 2.5;    // intensitet som startar en avläsning
+const CALM    = 1.5;    // under detta räknas som stillhet
+const CALM_T  = 12;     // tick av stillhet innan låsning (12 * 50ms = 600ms)
+
+let startBorta = false;
+function doljStart(){
+  if(startBorta) return;
+  startBorta = true;
+  $('start').classList.add('borta');
+  $('status').classList.add('pa');
+  $('meter').classList.add('pa');
+}
+
+addEventListener('keydown', e => {
+  if(e.metaKey && e.code === 'KeyM'){ e.preventDefault(); vaxlaTyst(); return; }
+  if(!e.metaKey) e.preventDefault();        // släpp igenom Cmd+R under utveckling
+  doljStart();
+  const p = POS.get(e.code);
+  if(!p) return;
+  down.add(e.code);
+  if(e.repeat) return;                      // autorepeat ska inte blåsa upp mätningen
+  hits++; hitX += p.x; hitY += p.y; hitN++;
+  flash(e.code);
+  if(phase === 'locked') reset();
+}, true);
+
+addEventListener('keyup', e => { if(!e.metaKey) e.preventDefault(); down.delete(e.code); }, true);
+addEventListener('blur', () => down.clear());
+
+function flash(code){
+  const el = keyEls.get(code); if(!el) return;
+  el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
+}
+
+const $ = id => document.getElementById(id);
+
+setInterval(tick, 50);
+
+function tick(){
+  intensity = intensity * DECAY_I + hits + down.size * HELD_W;
+  sx = sx * DECAY_C + hitX;
+  sy = sy * DECAY_C + hitY;
+  sw = sw * DECAY_C + hitN;
+  hits = hitX = hitY = hitN = 0;
+
+  $('meterfill').style.width = Math.min(100, intensity / 40 * 100) + '%';
+  $('meterfill').style.background = intensity > 20 ? 'var(--hot)' : 'var(--accent)';
+  $('meterval').textContent = intensity.toFixed(1);
+
+  if(phase === 'locked') return;
+
+  if(phase === 'idle' && intensity > WAKE){
+    phase = 'live'; peak = 0; trail = []; calmTicks = 0;
+    $('phase').textContent = 'läser av';
+    $('verdict').classList.remove('on');
+    $('foto').classList.remove('on');
+    sattRegn(false);
+    stoppaRadio();
+    if(mapReady) map.setPaintProperty('trail', 'line-opacity', 0.55);
+    liveDot.style.opacity = '1';
+    centroidDot.style.opacity = '1';
+    if(pinMarker){ pinMarker.remove(); pinMarker = null; }
+    if(mapReady) map.getSource('circle').setData({type:'FeatureCollection', features:[]});
+  }
+
+  if(phase !== 'live') return;
+
+  peak = Math.max(peak, intensity);
+
+  if(sw > 0.05){
+    const cx = sx / sw, cy = sy / sw;
+    const ll = toLngLat(cx, cy);
+    liveMarker.setLngLat(ll);
+    centroidDot.style.left = `calc(${cx} * var(--u))`;
+    centroidDot.style.top  = `calc(${cy} * var(--u))`;
+    $('coords').textContent = fmt(ll[1], ll[0]);
+    const last = trail[trail.length-1];
+    if(!last || Math.hypot(ll[0]-last[0], ll[1]-last[1]) > 0.6){
+      trail.push(ll);
+      if(mapReady) map.getSource('trail').setData(line(trail));
+    }
+  }
+
+  /* Gnistor ur tyngdpunkten medan du sveper. Mängden följer rörelsen, och de
+     driver med samma vind som resten — det är svepet som syns, inte en effekt. */
+  if(intensity > 3 && flingor.length < KTAK * 0.6){
+    const r = centroidDot.getBoundingClientRect();
+    if(r.width){
+      kanon(r.left + r.width / 2, r.top + r.height / 2,
+            -Math.PI / 2, Math.min(3, Math.round(intensity / 10)), 4 + intensity * 0.1);
+    }
+  }
+
+  calmTicks = intensity < CALM ? calmTicks + 1 : 0;
+  if(calmTicks >= CALM_T && peak > WAKE) lock();
+}
+
+function reset(){
+  phase = 'idle'; peak = 0; calmTicks = 0;
+  $('phase').textContent = 'lägg händerna på tangentbordet';
+  $('verdict').classList.remove('on');
+}
+
+/* --- 5. Låsning och domen ---------------------------------------------- */
+function fmt(lat, lon){
+  return `${Math.abs(lat).toFixed(4)}°${lat>=0?'N':'S'}  ${Math.abs(lon).toFixed(4)}°${lon>=0?'Ö':'V'}`;
+}
+const km = m => m >= 1000 ? (m/1000).toFixed(m < 10000 ? 1 : 0) + ' km' : Math.round(m) + ' m';
+
+async function lock(){
+  phase = 'locked';
+  $('phase').textContent = 'beräknar position';
+  liveDot.style.opacity = '0';
+  centroidDot.style.opacity = '0';
+
+  const cx = sx / Math.max(sw, 1e-6), cy = sy / Math.max(sw, 1e-6);
+  const [lon, lat] = toLngLat(cx, cy);
+
+  /* Ju häftigare svep, desto mindre osäkerhetscirkel — och desto mer
+     tvärsäker blir appen. Sambandet är helt påhittat. */
+  const radius = Math.max(1.5, 5_000_000 * Math.exp(-peak / 6));
+  const confidence = Math.min(99.4, 100 * (1 - Math.exp(-peak / 14)));
+
+  if(mapReady){
+    map.getSource('circle').setData(circlePoly(lat, lon, radius));
+    map.setPaintProperty('trail', 'line-opacity', 0.14);
+  }
+  const pinEl = document.createElement('div');
+  pinEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#4ade80;' +
+    'border:2px solid #0a0c10;box-shadow:0 0 24px #4ade80';
+  pinMarker = new maplibregl.Marker({element: pinEl}).setLngLat([lon, lat]).addTo(map);
+
+  const dLat = radius / 111320, dLon = dLat / Math.max(0.1, Math.cos(lat*Math.PI/180));
+  map.fitBounds([[lon-dLon, lat-dLat],[lon+dLon, lat+dLat]],
+    {padding:{top:90, bottom:230, left:480, right:90}, duration:2200, maxZoom:15});
+
+  /* Snabba API:er först — kortet ska upp direkt */
+  const round = ++roundId;
+  const [place, wx, wiki] = await Promise.all([reverse(lat,lon), weather(lat,lon), article(lat,lon)]);
+  if(round !== roundId) return;
+
+  $('v-plats').textContent = place.country && place.country !== '—'
+    ? `${place.name}, ${place.country}` : place.name;
+  $('v-coords').textContent = fmt(lat, lon);
+  $('v-precision').textContent =
+    `Säkerhet ${confidence.toFixed(1)} %  ·  felmarginal ± ${km(radius)}`;
+
+  /* Ett urval, inte allt. Det som hör ihop ligger på samma kort: vädret bär
+     vinden, terrängen bär luften, dygnet bär den lokala tiden. Resten fylls i
+     när respektive källa svarar. */
+  const v = id => `<span id="${id}">…</span>`;
+  $('kort').innerHTML = [
+    ['Väder',             wx.text,          vindText(wx)],
+    ['Terräng',           v('k-hojd'),      v('k-luft')],
+    ['Radio från platsen', v('k-radio') + '<span id="k-radio-m"></span>',
+                           v('k-musik'),     true],
+    ['Närmaste artikel',  wiki,             '',               true],
+    ['Närmaste art',      v('k-art'),       ''],
+    ['Seismik',           v('k-skalv'),     ''],
+    ['Dygnet',            v('k-sol'),       'lokal tid ' + wx.time, true],
+  ].map(([etikett, varde, under, bred]) =>
+    `<div class="kort${bred ? ' bred' : ''}">` +
+      `<div class="etikett">${etikett}</div>` +
+      `<div class="varde">${varde}</div>` +
+      (under ? `<div class="under">${under}</div>` : '') +
+    '</div>').join('');
+
+  $('phase').textContent = 'position fastställd';
+  $('verdict').classList.add('on');
+  konfetti(Math.max(0.7, Math.min(3, peak / 16)));     // mängden följer svepet
+
+  sattVind(wx);          // konfettin ska blåsa åt samma håll som på platsen
+  sattRegn(true);        // och fortsätter falla, så vinden syns hela tiden
+
+  /* Resten kommer när den kommer. Kortet står redan uppe. */
+  visaFoto(lat, lon, round);
+  extraRader(lat, lon, place.kod, round);
+  startaRadio(lat, lon, round);
+}
+
+/* --- 6. De öppna API:erna ---------------------------------------------- */
+const timeout = ms => AbortSignal.timeout(ms);
+
+async function reverse(lat, lon){
+  try{
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=12&accept-language=sv&lat=${lat}&lon=${lon}`,
+      {signal: timeout(8000)});
+    const j = await r.json();
+    if(j.error || !j.address) return {name:'ingenstans', country:'öppet hav', kod:''};
+    const a = j.address;
+    return {
+      name: a.city || a.town || a.village || a.hamlet || a.municipality ||
+            a.county || a.state || j.name || 'namnlös plats',
+      country: a.country || '—',
+      kod: (a.country_code || '').toUpperCase(),
+    };
+  }catch{ return {name:'okänt', country:'—', kod:''}; }
+}
+
+const WMO = {0:'klart',1:'mestadels klart',2:'halvklart',3:'mulet',45:'dimma',48:'underkyld dimma',
+  51:'lätt duggregn',53:'duggregn',55:'tätt duggregn',56:'underkylt duggregn',57:'underkylt duggregn',
+  61:'lätt regn',63:'regn',65:'kraftigt regn',66:'underkylt regn',67:'underkylt regn',
+  71:'lätt snöfall',73:'snöfall',75:'ymnigt snöfall',77:'snökorn',
+  80:'regnskurar',81:'regnskurar',82:'kraftiga regnskurar',85:'snöbyar',86:'kraftiga snöbyar',
+  95:'åska',96:'åska med hagel',99:'åska med hagel'};
+
+async function weather(lat, lon){
+  try{
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m` +
+      '&timezone=auto', {signal: timeout(8000)});
+    const j = await r.json();
+    const c = j.current;
+    return {
+      text: `${WMO[c.weather_code] ?? 'oklart'}, ${Math.round(c.temperature_2m)} °C`,
+      time: (c.time || '').slice(11) + '  ' + (j.timezone_abbreviation || ''),
+      fart: c.wind_speed_10m,
+      fran: c.wind_direction_10m,
+    };
+  }catch{ return {text:'—', time:'—'}; }
+}
+
+/* Geosearch tar som mest 10 km radie, och svenska Wikipedia är glest geotaggat.
+   Med bara den kombinationen kom det en artikel ungefär var femte gång. Därför
+   samma knep som för bilderna: vidgande ringar av frågepunkter, och engelska
+   Wikipedia som påbackning när svenskan är tom. */
+const ARTIKEL_RINGAR = [[0, 1], [30, 4], [90, 4]];      // radie i km, antal punkter
+
+async function geosok(sprak, lat, lon){
+  try{
+    const j = await hamta(`https://${sprak}.wikipedia.org/w/api.php?action=query` +
+      `&list=geosearch&format=json&origin=*&gsradius=10000&gslimit=10` +
+      `&gscoord=${lat}%7C${lon}`);
+    return (j.query && j.query.geosearch) || [];
+  }catch{ return []; }
+}
+
+async function article(lat, lon){
+  for(const [radie, antal] of ARTIKEL_RINGAR){
+    const punkter = antal === 1 ? [[lat, lon]]
+      : Array.from({length: antal}, (_, i) => flytta(lat, lon, radie, i * 360 / antal));
+    const grupper = await Promise.all(
+      punkter.flatMap(([a, b]) => [geosok('sv', a, b), geosok('en', a, b)]));
+
+    /* Avståndet räknas till den egna landningspunkten, inte till frågepunkten —
+       ringarnas punkter ligger ju flera mil bort. */
+    let sv = null, en = null;
+    grupper.forEach((lista, i) => {
+      for(const t of lista){
+        if(t.lat == null) continue;
+        const d = haversine(lat, lon, t.lat, t.lon);
+        const hink = i % 2 === 0 ? 'sv' : 'en';
+        const nuvarande = hink === 'sv' ? sv : en;
+        if(!nuvarande || d < nuvarande.d){
+          if(hink === 'sv') sv = {d, titel: t.title}; else en = {d, titel: t.title};
+        }
+      }
+    });
+
+    /* Svensk titel vinner om den inte ligger påtagligt längre bort. */
+    const bast = sv && (!en || sv.d <= en.d * 1.25) ? sv : en;
+    if(bast) return `${bast.titel}, ${km(bast.d)} bort`;
+  }
+  return 'ingen inom 100 km';
+}
+
+function haversine(la1, lo1, la2, lo2){
+  const R = 6371000, p = Math.PI/180;
+  const a = Math.sin((la2-la1)*p/2)**2 +
+            Math.cos(la1*p)*Math.cos(la2*p)*Math.sin((lo2-lo1)*p/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+/* --- 7. Bilden -----------------------------------------------------------
+   Ett kort med fakta är en uppslagning. Ett foto är en plats. Commons
+   geosearch tar högst 10 km radie, så på glesa ställen frågar vi i vidgande
+   ringar och behåller den bild som ligger närmast där du faktiskt landade.
+   Hittas ingenting är det också ett svar.
+   ------------------------------------------------------------------------ */
+const RINGAR = [[0, 1], [25, 6], [60, 6], [140, 8]];      // radie i km, antal frågepunkter
+
+/* Mapillary är gatubilder på riktigt — ögonhöjd, ofta hela 360 grader. Men de
+   kräver en gratisnyckel, och konton skapar du själv: mapillary.com → logga in
+   → Developers → Register application → kopiera klientnyckeln ("MLY|…") hit.
+   Är strängen tom hoppar vi rakt till Commons, så appen fungerar ändå. */
+const MAPILLARY_TOKEN = '';
+
+async function mapillaryVid(lat, lon){
+  if(!MAPILLARY_TOKEN) return null;
+  for(const r of [0.4, 1.5, 6, 25]){                 // km, allt vidare ruta
+    const dlat = r / 111, dlon = dlat / Math.max(0.05, Math.cos(lat * Math.PI / 180));
+    const bbox = [lon - dlon, lat - dlat, lon + dlon, lat + dlat]
+      .map(v => v.toFixed(6)).join(',');
+    try{
+      const j = await hamta('https://graph.mapillary.com/images?access_token=' +
+        encodeURIComponent(MAPILLARY_TOKEN) +
+        '&fields=id,computed_geometry,thumb_1024_url,captured_at,is_pano' +
+        `&bbox=${bbox}&limit=25`);
+      let bast = null;
+      for(const b of j.data || []){
+        const c = b.computed_geometry && b.computed_geometry.coordinates;
+        if(!c || !b.thumb_1024_url) continue;
+        const d = haversine(lat, lon, c[1], c[0]);
+        if(!bast || d < bast.d) bast = {d, bild: b};
+      }
+      if(bast) return bast;
+    }catch{ return null; }                            // ogiltig nyckel: ge upp tyst
+  }
+  return null;
+}
+
+function flytta(lat, lon, avstand, baring){
+  const d = avstand / 6371, b = baring * Math.PI / 180;
+  const la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+  const la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
+  const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la),
+                              Math.cos(d) - Math.sin(la) * Math.sin(la2));
+  return [la2 * 180 / Math.PI, ((lo2 * 180 / Math.PI + 540) % 360) - 180];
+}
+
+async function commonsVid(lat, lon){
+  const u = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*' +
+    '&generator=geosearch&ggsnamespace=6&ggsradius=10000&ggslimit=8' +
+    `&ggscoord=${lat}%7C${lon}&prop=imageinfo%7Ccoordinates` +
+    '&iiprop=url%7Cextmetadata&iiurlwidth=900';
+  try{
+    const r = await fetch(u, {signal: AbortSignal.timeout(9000)});
+    const j = await r.json();
+    return Object.values(j.query?.pages || {});
+  }catch{ return []; }
+}
+
+/* Upphovsfältet från Commons är HTML och kommer utifrån. Taggarna skalas bort
+   med reguljärt uttryck, och entiteterna avkodas i en textarea — dess innehåll
+   körs aldrig, till skillnad från innerHTML på ett vanligt element. */
+function tillText(html){
+  const ta = document.createElement('textarea');
+  ta.innerHTML = String(html || '').replace(/<[^>]*>/g, ' ');
+  return ta.value.replace(/\s+/g, ' ').trim();
+}
+const esc = t => String(t).replace(/[<>&"]/g,
+  c => ({'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;'}[c]));
+
+/* Commons geotaggar rymdbilder vid nadirpunkten, så en tom öken "har" ett
+   NASA-foto av jordklotet. Det stjäl platsen från det ärligare svaret att
+   ingen någonsin varit där. Kartor och diagram sållas bort på samma gång. */
+const FRAN_RYMDEN = /^(iss|sts|as\d|expedition|s\d+-e-)|view of earth|from space|satellite|landsat|sentinel|modis|aerial view of earth/i;
+const RYMDUPPHOV = /nasa|\besa\b|remote sensing|copernicus|usgs|jaxa|roscosmos/i;
+
+function arFoto(sida, ii){
+  const titel = sida.title || '';
+  if(!/\.jpe?g$/i.test(titel)) return false;              // kartor och diagram är sällan jpeg
+  if(FRAN_RYMDEN.test(titel.replace(/^File:/, ''))) return false;
+  const m = ii.extmetadata || {};
+  const upphov = tillText(m.Artist && m.Artist.value);
+  if(RYMDUPPHOV.test(upphov)) return false;
+  return true;
+}
+
+async function visaFoto(lat, lon, round){
+  $('foto-ram').innerHTML = '<div id="foto-vantar">letar efter en bild …</div>';
+  $('foto-text').textContent = '';
+  $('foto').classList.add('on');
+
+  /* Gatubild först. Den är ögonhöjd och slår allt annat. */
+  const gata = await mapillaryVid(lat, lon);
+  if(round !== roundId) return;
+  if(gata){
+    const img = document.createElement('img');
+    img.alt = 'gatubild';
+    img.onerror = () => {
+      $('foto-ram').innerHTML = '<div id="foto-vantar">bilden gick inte att hämta</div>';
+    };
+    img.src = gata.bild.thumb_1024_url;
+    $('foto-ram').replaceChildren(img);
+    const ar = gata.bild.captured_at
+      ? new Date(gata.bild.captured_at).toLocaleDateString('sv-SE') : 'okänt datum';
+    $('foto-text').innerHTML =
+      `<b>Gatubild${gata.bild.is_pano ? ' i 360°' : ''}</b> — ${km(gata.d)} härifrån<br>` +
+      `${ar} · CC BY-SA 4.0 · Mapillary`;
+    return;
+  }
+
+  let bast = null, sokt = 0;
+  for(const [radie, antal] of RINGAR){
+    const punkter = antal === 1 ? [[lat, lon]]
+      : Array.from({length: antal}, (_, i) => flytta(lat, lon, radie, i * 360 / antal));
+    sokt = radie + 10;
+    const svar = await Promise.all(punkter.map(([a, b]) => commonsVid(a, b)));
+    if(round !== roundId) return;                     // nytt svep hann före
+    for(const sidor of svar) for(const sida of sidor){
+      const c = sida.coordinates && sida.coordinates[0];
+      const ii = sida.imageinfo && sida.imageinfo[0];
+      if(!c || !ii || !ii.thumburl) continue;
+      if(!arFoto(sida, ii)) continue;
+      const d = haversine(lat, lon, c.lat, c.lon);
+      if(!bast || d < bast.d) bast = {d, sida, ii};
+    }
+    if(bast) break;
+  }
+  if(round !== roundId) return;
+
+  if(!bast){
+    $('foto-ram').innerHTML = '<div id="foto-vantar">ingen har fotograferat här<br>' +
+      `<span style="opacity:.55">inte inom ${sokt} km heller</span></div>`;
+    return;
+  }
+
+  const m = bast.ii.extmetadata || {};
+  const titel = bast.sida.title.replace(/^File:/, '').replace(/\.[a-z0-9]+$/i, '');
+  const upphov = tillText(m.Artist && m.Artist.value) || 'okänd upphovsperson';
+  const licens = tillText(m.LicenseShortName && m.LicenseShortName.value) || 'se Commons';
+
+  const img = document.createElement('img');
+  img.alt = titel;
+  img.onerror = () => {
+    $('foto-ram').innerHTML = '<div id="foto-vantar">bilden gick inte att hämta</div>';
+  };
+  img.src = bast.ii.thumburl;
+  $('foto-ram').replaceChildren(img);
+  $('foto-text').innerHTML = `<b>${esc(titel)}</b> — ${km(bast.d)} härifrån<br>` +
+    `${esc(upphov)} · ${esc(licens)} · Wikimedia Commons`;
+}
+/* --- 8. Fler öppna källor -----------------------------------------------
+   Alla nyckellösa, alla parallella, var och en fyller sin egen rad när den
+   svarar. Kortet står redan uppe, så ingen av dem kan hålla upp något.
+   GDELT hade gett nyheter men faller på CORS; det kräver en mellanserver.
+   ------------------------------------------------------------------------ */
+const fyll = (id, txt, round) => {
+  if(round !== roundId) return;
+  const el = $(id); if(el) el.textContent = txt;
+};
+const hamta = async (u, ms = 9000) => {
+  const r = await fetch(u, {signal: AbortSignal.timeout(ms)});
+  return r.json();
+};
+
+function extraRader(lat, lon, kod, round){
+  /* Höjd över havet */
+  hamta(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`)
+    .then(j => fyll('k-hojd', Math.round(j.elevation[0]).toLocaleString('sv-SE') + ' m ö.h.', round))
+    .catch(() => fyll('k-hojd', '—', round));
+
+  /* Soluppgång och solnedgång på plats */
+  hamta(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        '&daily=sunrise,sunset&timezone=auto&forecast_days=1')
+    .then(j => fyll('k-sol', `${j.daily.sunrise[0].slice(11)} – ${j.daily.sunset[0].slice(11)}`, round))
+    .catch(() => fyll('k-sol', '—', round));
+
+  /* Luftkvalitet */
+  hamta(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}` +
+        `&longitude=${lon}&current=pm2_5`)
+    .then(j => {
+      const v = j.current && j.current.pm2_5;
+      if(v == null) return fyll('k-luft', '—', round);
+      const ord = v < 10 ? 'bra' : v < 25 ? 'måttlig' : v < 50 ? 'dålig' : 'mycket dålig';
+      fyll('k-luft', `${v.toFixed(1)} µg/m³ PM2,5, ${ord}`, round);
+    })
+    .catch(() => fyll('k-luft', '—', round));
+
+  /* Närmaste jordskalv det senaste året */
+  const ettArSen = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+  hamta('https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson' +
+        `&latitude=${lat}&longitude=${lon}&maxradiuskm=600&limit=1` +
+        `&orderby=magnitude&starttime=${ettArSen}`)
+    .then(j => {
+      const f = j.features && j.features[0];
+      if(!f) return fyll('k-skalv', 'inget inom 600 km på ett år', round);
+      const [lo2, la2] = f.geometry.coordinates;
+      fyll('k-skalv', `M${f.properties.mag.toFixed(1)}, ${km(haversine(lat, lon, la2, lo2))} bort`, round);
+    })
+    .catch(() => fyll('k-skalv', '—', round));
+
+  /* Närmaste artobservation, granskad av iNaturalists community */
+  hamta(`https://api.inaturalist.org/v1/observations?lat=${lat}&lng=${lon}&radius=25` +
+        '&quality_grade=research&per_page=20&locale=sv&order_by=observed_on')
+    .then(j => {
+      let bast = null;
+      for(const o of j.results || []){
+        const c = o.geojson && o.geojson.coordinates;
+        if(!c || !o.taxon) continue;
+        const d = haversine(lat, lon, c[1], c[0]);
+        if(!bast || d < bast.d) bast = {d, namn: o.taxon.preferred_common_name || o.taxon.name};
+      }
+      fyll('k-art', bast ? `${bast.namn}, ${km(bast.d)} bort` : 'ingen observerad inom 25 km', round);
+    })
+    .catch(() => fyll('k-art', '—', round));
+
+  /* Grupper registrerade i landet, ur MusicBrainz */
+  if(kod){
+    hamta(`https://musicbrainz.org/ws/2/artist?query=country:${kod}%20AND%20type:group` +
+          '&fmt=json&limit=3')
+      .then(j => {
+        /* MusicBrainz släpper ungefär ett anrop i sekunden och svarar då utan
+           artists-fältet. Det är inte samma sak som att landet saknar band. */
+        if(!j || !Array.isArray(j.artists)) return fyll('k-musik', 'fick inget svar', round);
+        const namn = j.artists.map(a => a.name).filter(Boolean).slice(0, 3);
+        fyll('k-musik', namn.length ? namn.join(', ') : 'inga registrerade', round);
+      })
+      .catch(() => fyll('k-musik', '—', round));
+  } else fyll('k-musik', '—', round);
+}
+/* Meteorologisk vindriktning anger varifrån det blåser, räknat medsols från
+   norr. Vektorn dit vinden FÄRDAS blir därför den motsatta: en vind från väst
+   (270°) skjuter konfettin österut, alltså åt höger på skärmen. */
+const VADERSTRECK = ['nord', 'nordost', 'ost', 'sydost', 'syd', 'sydväst', 'väst', 'nordväst'];
+
+function vindText(wx){
+  if(wx.fart == null) return '—';
+  if(wx.fart < 1) return 'stiltje';
+  const s = VADERSTRECK[Math.round(wx.fran / 45) % 8];
+  return `${Math.round(wx.fart)} km/h från ${s}`;
+}
+
+let vindX = 0;                      // sidledes acceleration på konfettin
+function sattVind(wx){
+  if(wx.fart == null){ vindX = 0; return; }
+  const ostlig = -wx.fart * Math.sin(wx.fran * Math.PI / 180);
+  vindX = ostlig * 0.18;            // km/h till något som syns men inte blåser bort allt
+}
+
+/* --- 9. Konfetti ---------------------------------------------------------
+   Egen duk överst, genomsläpplig för musen. Slingan startar bara när det
+   finns partiklar och stannar av sig själv, så den kostar ingenting när inget
+   faller. Mängden följer svepets topp: vildare rörelse, mer konfetti.
+   ------------------------------------------------------------------------ */
+const kcv = $('konfetti'), kctx = kcv.getContext('2d');
+const KFARGER = ['#4ade80', '#fbbf24', '#60a5fa', '#ff7ac6', '#e8ecf1', '#a77dff'];
+const KTAK = 460;                                   // partikeltak, annars tappar den takten
+const REGN_TAKT = 34;                               // bitar per sekund i det ihållande regnet
+const REGN_TAK = 200;                               // regnets egen budget, skild från salvorna
+let flingor = [], kloop = false, kw = 0, kh = 0;
+let regnar = false, regnSkuld = 0;
+
+function kstorlek(){
+  const r = Math.min(devicePixelRatio || 1, 2);
+  kw = kcv.width = Math.round(innerWidth * r);
+  kh = kcv.height = Math.round(innerHeight * r);
+  kctx.setTransform(r, 0, 0, r, 0, 0);              // rita i css-pixlar
+}
+addEventListener('resize', kstorlek);
+kstorlek();
+
+function nyFlinga(x, y, vx, vy, skala = 1){
+  return {
+    x, y, vx, vy,
+    b: (5 + Math.random() * 7) * skala,
+    h: (7 + Math.random() * 9) * skala,
+    vinkel: Math.random() * Math.PI * 2,
+    snurr: (Math.random() - 0.5) * 0.4,
+    vagg: Math.random() * Math.PI * 2,
+    farg: KFARGER[(Math.random() * KFARGER.length) | 0],
+    liv: 1,
+  };
+}
+
+function starta(){
+  if(kloop) return;
+  kloop = true; ksist = performance.now(); requestAnimationFrame(ksteg);
+}
+
+function kanon(x, y, riktning, antal, kraft){
+  for(let i = 0; i < antal && flingor.length < KTAK; i++){
+    const spridning = (Math.random() - 0.5) * 0.9;
+    const v = kraft * (0.55 + Math.random() * 0.75);
+    flingor.push(nyFlinga(x, y,
+      Math.cos(riktning + spridning) * v,
+      Math.sin(riktning + spridning) * v));
+  }
+  starta();
+}
+
+/* Ihållande duggregn uppifrån. Bitarna får ingen egen fart i sidled, så allt
+   som rör dem horisontellt är vinden på platsen — det är därför regnet finns.
+   Utsläppsbandet skjuts åt det håll vinden kommer ifrån, annars blåser sidan
+   tom och allt samlas i ena kanten. */
+function regna(dt){
+  if(!regnar) return;
+  regnSkuld += REGN_TAKT * dt;
+  const b = innerWidth, m = b * 0.25;
+  while(regnSkuld >= 1){
+    regnSkuld--;
+    if(flingor.length >= REGN_TAK) break;
+    const x = Math.random() * (b + 2 * m) - m - Math.sign(vindX) * m * 0.6;
+    const f = nyFlinga(x, -20 - Math.random() * 60, 0, 1 + Math.random() * 1.5, 0.78);
+    f.regn = true;
+    flingor.push(f);
+  }
+}
+
+function sattRegn(pa){
+  regnar = pa;
+  if(pa) starta(); else regnSkuld = 0;
+}
+
+/* Två kanoner snett inåt från nedre hörnen, plus ett regn uppifrån. */
+function konfetti(styrka = 1){
+  const b = innerWidth, h = innerHeight;
+  const n = Math.round(60 * styrka);
+  kanon(0, h, -Math.PI / 3.1, n, 17);
+  kanon(b, h, -Math.PI + Math.PI / 3.1, n, 17);
+  for(let i = 0; i < n * 0.6 && flingor.length < KTAK; i++)
+    kanon(Math.random() * b, -20 - Math.random() * 120, Math.PI / 2, 1, 2);
+}
+
+let ksist = 0;
+function ksteg(nu){
+  const dt = Math.min(0.05, (nu - ksist) / 1000); ksist = nu;
+  const h = innerHeight;
+  regna(dt);
+  kctx.clearRect(0, 0, kw, kh);
+
+  for(const f of flingor){
+    f.vy += 26 * dt;                                 // gravitation
+    f.vx += vindX * dt;                              // vinden på platsen du landade
+    /* Regnbitarna får kraftigt luftmotstånd i höjdled så de dalar i stället för
+       att störta. Då hinner vinden verka på dem, och det är hela poängen med
+       regnet. Sidledes motstånd lämnas som det är, annars dämpas vinden bort. */
+    f.vx *= 1 - 0.9 * dt;
+    f.vy *= 1 - (f.regn ? 6 : 0.3) * dt;
+    f.vagg += dt * 5;
+    f.x += (f.vx + Math.sin(f.vagg) * 1.4) * dt * 60;
+    f.y += f.vy * dt * 60;
+    f.vinkel += f.snurr;
+    if(f.y > h + 40) f.liv = 0;
+
+    if(!f.liv) continue;
+    kctx.save();
+    kctx.translate(f.x, f.y);
+    kctx.rotate(f.vinkel);
+    /* Platta till på bredden i takt med rotationen — då ser pappersbiten ut
+       att vända sig i luften i stället för att vara en snurrande rektangel. */
+    kctx.scale(Math.cos(f.vagg * 0.7), 1);
+    kctx.fillStyle = f.farg;
+    kctx.fillRect(-f.b / 2, -f.h / 2, f.b, f.h);
+    kctx.restore();
+  }
+  flingor = flingor.filter(f => f.liv);
+
+  if(flingor.length || regnar) requestAnimationFrame(ksteg);
+  else { kloop = false; kctx.clearRect(0, 0, kw, kh); }
+}
+/* --- 10. Radion ----------------------------------------------------------
+   En låt av en artist från landet är en uppslagning. En direktsändning är vad
+   folk där lyssnar på just nu. radio-browser.info är nyckellös, CORS-öppen och
+   sökbar på koordinater, så samma vidgande ringar som för bilder och artiklar.
+
+   Ingen knapp att klicka på — hela premissen är att bara tangentbordet får
+   användas. Den startar av sig själv när du landat (webbläsarens autoplay-spärr
+   är redan avklarad av ditt svep) och Cmd+M tystar.
+   ------------------------------------------------------------------------ */
+const RADIO_SPEGLAR = ['https://de1.api.radio-browser.info',
+                       'https://all.api.radio-browser.info'];
+const RADIO_RINGAR = [150, 500, 1500];               // km
+const RADIO_VOLYM = 0.65;
+
+let ljud = null, tyst = false, tonare = null;
+
+async function sokStation(lat, lon){
+  for(const avstand of RADIO_RINGAR){
+    for(const bas of RADIO_SPEGLAR){
+      let lista;
+      try{
+        lista = await hamta(`${bas}/json/stations/search?limit=12&hidebroken=true` +
+          `&has_geo_info=true&geo_lat=${lat}&geo_long=${lon}` +
+          `&geo_distance=${avstand * 1000}&order=clickcount&reverse=true`, 10000);
+      }catch{ continue; }                            // spegeln svarade inte, prova nästa
+      if(!Array.isArray(lista)) continue;
+      let bast = null;
+      for(const st of lista){
+        if(!st.url_resolved) continue;
+        const d = st.geo_lat != null
+          ? haversine(lat, lon, st.geo_lat, st.geo_long) : avstand * 1000;
+        if(!bast || d < bast.d) bast = {d, st};       // närmast slår populärast
+      }
+      if(bast) return bast;
+      break;                                         // spegeln fungerade men var tom
+    }
+  }
+  return null;
+}
+
+function stoppaRadio(){
+  clearInterval(tonare); tonare = null;
+  if(ljud){ try{ ljud.pause(); ljud.src = ''; }catch{} ljud = null; }
+}
+
+function vaxlaTyst(){
+  tyst = !tyst;
+  if(ljud) ljud.volume = tyst ? 0 : RADIO_VOLYM;
+  const u = $('k-radio-m');
+  if(u) u.textContent = tyst ? ' · tyst' : '';
+}
+
+async function startaRadio(lat, lon, round){
+  stoppaRadio();
+  const traff = await sokStation(lat, lon);
+  if(round !== roundId) return;
+  if(!traff){ fyll('k-radio', 'ingen station i närheten', round); return; }
+
+  const st = traff.st;
+  fyll('k-radio', `${st.name.trim().slice(0, 42)} · ${km(traff.d)} bort`, round);
+
+  ljud = new Audio(st.url_resolved);
+  ljud.volume = 0;
+  ljud.addEventListener('error', () => {
+    if(round === roundId) fyll('k-radio', `${st.name.trim().slice(0, 42)} · strömmen svarar inte`, round);
+  }, {once: true});
+
+  try{ await ljud.play(); }
+  catch{ return; }                                   // webbläsaren sa nej, kortet står kvar
+  if(round !== roundId){ stoppaRadio(); return; }
+
+  /* Tona upp över ett par sekunder. Att kastas in mitt i en reklampaus på full
+     volym är inte den upplevelse vi är ute efter. */
+  let v = 0;
+  tonare = setInterval(() => {
+    if(!ljud){ clearInterval(tonare); return; }
+    v = Math.min(1, v + 0.04);
+    ljud.volume = tyst ? 0 : RADIO_VOLYM * v;
+    if(v >= 1){ clearInterval(tonare); tonare = null; }
+  }, 60);
+}
+</script>
+</body>
+</html>
