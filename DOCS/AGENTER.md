@@ -114,8 +114,23 @@ landningspunkten — inte till frågepunkten.
 
 ## Konventioner
 
-**En fil, inget byggsteg.** `index.html` innehåller allt utom MapLibre.
-Behåll det. Demon ska inte kunna falla på en saknad beroendeinstallation.
+**Inget byggsteg.** Det är regeln, inte "en fil". Flera filer går bra, men de
+ska laddas som vanliga `<script src>` utan paketering, transpilering eller
+installationssteg. Demon ska inte kunna falla på ett `npm install` som ingen
+körde.
+
+**Ren logik som ska testas läggs i en egen fil.** Det går inte att testa något
+som bara finns inuti `index.html`. Mönstret är `vader.js`: ingen DOM, inget
+nätverk, och en avslutning som lämnar ut sitt API både som webbläsarglobal och
+som node-modul.
+
+```js
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+else Object.assign(yttre, api);
+```
+
+Det som rör DOM, canvas eller nätverk stannar i `index.html`. Gränsen går vid
+testbarhet, inte vid filstorlek.
 
 **Numrerade avsnitt** med en rubrikkommentar som förklarar *varför*, inte vad.
 
@@ -143,6 +158,7 @@ Mät, gissa inte. Det som fungerat bra:
 | en ny källa | 15 slumpvisa landningspunkter, räkna träffar |
 | prestanda | samla `requestAnimationFrame`-deltan och ta medianen |
 | tidsberäkning | testa på gränserna, inte i mitten |
+| ren logik | riktiga tester: `node --test test/urval.test.js` |
 | ljudnedstängning | skapa flera element, stoppa, kontrollera att `src` är borta på alla |
 
 ---

@@ -7,6 +7,10 @@ blir en koordinat på jorden, och appen berättar vad som finns där: ort, väde
 ett fotografi, närmaste Wikipedia-artikel, närmaste observerade art, det
 kraftigaste jordskalvet i närheten, och lokalradion som sänder därifrån just nu.
 
+Konfettin som faller över skärmen är en avläsning av vädret på platsen — vinden
+styr driften, och de tre mest talande förhållandena styr fall, färg, täthet,
+djup och ljus.
+
 Positionen har inget som helst samband med var du faktiskt befinner dig.
 
 ---
@@ -30,6 +34,14 @@ sidan ursprunget `null`, och då nekar Nominatim, Wikipedia och Commons anropen.
 | `?kb=full` | fullstort Apple-tangentbord i stället för MacBook |
 | `?raw` | rå, ovriden projektion — två tredjedelar hav |
 
+### Tester
+
+```bash
+node --test test/urval.test.js
+```
+
+Inga beroenden — node:test räcker.
+
 ### Tangenter
 
 | | |
@@ -47,8 +59,12 @@ sidan ursprunget `null`, och då nekar Nominatim, Wikipedia och Commons anropen.
 
 | fil | roll |
 |---|---|
-| `index.html` | **Tangent.** Hela appen i en fil. Landmasken ligger inbakad som base64, så den behöver inga lokala datafiler. |
+| `index.html` | **Tangent.** Allt som rör DOM, canvas och nätverk. Landmasken ligger inbakad som base64, så den behöver inga lokala datafiler. |
+| `vader.js` | Ren logik för väderkonfettin — vilka tre förhållanden som visas och hur de ser ut. Utan DOM och nätverk, så den går att testa. |
+| `test/urval.test.js` | 18 tester för urvalslogiken. |
 | `index-utan-bild.html` | Säkerhetskopia från innan bildpanelen byggdes. Kan tas bort nu när git finns. |
+
+Inget byggsteg. `vader.js` laddas som ett vanligt `<script src>`.
 
 ### Datafiler
 
