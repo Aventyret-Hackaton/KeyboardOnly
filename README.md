@@ -42,10 +42,31 @@ Numreringen följer briefen.
 | **8** | Data från ett öppet API | Sju källor, inga nycklar och inga konton. Se nedan. |
 | **4** | Geolokalisering, karta med markörer | Karta med markör och osäkerhetscirkel för varje nedslag. |
 | **6** | Konfetti: everytime, all the time | Och den **är en avläsning av vädret**: vinden styr driften, och de tre mest talande förhållandena styr fall, färg, täthet, djup och ljus. Regn faller snett i hård vind, snö lägger sig, åska fryser bilden. |
-| **7** | Canvas | Konfettin ritas på canvas. Att *användaren* ritar finns i sidospåren `rita.html` och `doodle.html`, inte i huvudtjänsten. |
+| **7** | Canvas | Konfettin ritas på canvas, och användaren ritar själv i [Tangentbordspenseln](https://tangentiellt.notini.se/rita.html) — se nedan. |
 
 Inte gjort: 3D-gränssnitt, telefonstyrning med mikrofon, kamera eller gyro,
 samt parkoppling mellan enheter.
+
+---
+
+## Naturtrogna teckningar
+
+Inmatningsmetoden är inte begränsad till positionering. Samma avläsning av
+tangentbordets fysiska yta fungerar lika väl som ritverktyg.
+
+### → [tangentiellt.notini.se/rita.html](https://tangentiellt.notini.se/rita.html)
+
+Proof of concept. Antalet fingrar du håller nere väljer färg, och sex är taket
+— inte av designskäl, utan för att ett USB-tangentbord inte rapporterar fler
+samtidiga tangenter än så. Hårdvarans begränsning blev paletten.
+
+Rörelsemängden styr penselns bredd. Hur brett isär du greppar styr symmetrin:
+fingrarna ihop ger fri ritning, isär ger mandala. Greppa med shift, ctrl och
+alt — de ligger i en egen byte i HID-protokollet och äter därför inte upp de
+sex platserna.
+
+Den färdiga teckningen spelas upp som ljud, och jämförs sedan med 177 länders
+silhuetter för att avgöra vilket land du råkade rita.
 
 ---
 
