@@ -184,6 +184,7 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="vader.js"></script>
 <script>
 /* ==========================================================================
    TANGENTBORDSPOSITIONERAREN
@@ -674,6 +675,7 @@ async function lock(){
   konfetti(Math.max(0.7, Math.min(3, peak / 16)));     // mängden följer svepet
 
   sattVind(wx);          // konfettin ska blåsa åt samma håll som på platsen
+  sattVader(wx.ra);      // och visa de tre mest talande förhållandena
   sattRegn(true);        // och fortsätter falla, så vinden syns hela tiden
 
   /* Resten kommer när den kommer. Kortet står redan uppe. */
@@ -711,7 +713,9 @@ const WMO = {0:'klart',1:'mestadels klart',2:'halvklart',3:'mulet',45:'dimma',48
 async function weather(lat, lon){
   try{
     const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      `&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m` +
+      '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,' +
+      'precipitation,rain,showers,snowfall,cloud_cover,relative_humidity_2m,' +
+      'pressure_msl,is_day,visibility' +
       '&timezone=auto', {signal: timeout(8000)});
     const j = await r.json();
     const c = j.current;
@@ -720,6 +724,7 @@ async function weather(lat, lon){
       time: (c.time || '').slice(11) + '  ' + (j.timezone_abbreviation || ''),
       fart: c.wind_speed_10m,
       fran: c.wind_direction_10m,
+      ra: c,                      // hela mätningen, till konfettins väderlägen
     };
   }catch{ return {text:'—', time:'—'}; }
 }
@@ -1028,12 +1033,99 @@ function sattVind(wx){
    faller. Mängden följer svepets topp: vildare rörelse, mer konfetti.
    ------------------------------------------------------------------------ */
 const kcv = $('konfetti'), kctx = kcv.getContext('2d');
-const KFARGER = ['#4ade80', '#fbbf24', '#60a5fa', '#ff7ac6', '#e8ecf1', '#a77dff'];
+const KFARGER = [[74,222,128], [251,191,36], [96,165,250],
+                 [255,122,198], [232,236,241], [167,125,255]];
 const KTAK = 460;                                   // partikeltak, annars tappar den takten
 const REGN_TAKT = 34;                               // bitar per sekund i det ihållande regnet
 const REGN_TAK = 200;                               // regnets egen budget, skild från salvorna
 let flingor = [], kloop = false, kw = 0, kh = 0;
 let regnar = false, regnSkuld = 0;
+
+/* --- 9b. Vädret i konfettin ----------------------------------------------
+   vader.js väljer de tre mest talande förhållandena och bygger ett läge av
+   dem. Varje förhållande äger exakt en visuell egenskap, så de kan inte
+   krocka. Vinden ligger utanför och rörs inte.
+
+   Övergången mellan lägen glider över ett par sekunder i stället för att
+   hacka. Tal glider; kategorier som nederbördstyp byts direkt, men bara för
+   NYA bitar — de som redan faller behåller sitt utseende, vilket ger en mjuk
+   övergång gratis. */
+const LAGE_TAU = 1.8;                               // sekunder att glida över
+const GLIDANDE = ['fallFart','fallDrag','tumlar','langd','storlek','taktFaktor',
+                  'glans','djup','klump','drift','rastlos','ljus','varmt',
+                  'fargTon','fargVikt'];
+
+let lage = Object.assign({}, NEUTRALT, {fargTon: 0.5, fargVikt: 0});
+let malLage = Object.assign({}, lage);
+
+function sattVader(ra){
+  const valda = valjForhallanden(ra);
+  const nytt = byggLage(valda, ra || {});
+  /* fargTon är null när temperaturen inte valdes. Null går inte att glida mot,
+     så vikten glider i stället: 0 betyder originalpaletten. */
+  nytt.fargVikt = nytt.fargTon === null ? 0 : 1;
+  if(nytt.fargTon === null) nytt.fargTon = lage.fargTon;
+  malLage = nytt;
+}
+
+function glidLage(dt){
+  const k = 1 - Math.exp(-dt / LAGE_TAU);
+  for(const n of GLIDANDE) lage[n] += (malLage[n] - lage[n]) * k;
+  lage.fallTyp   = malLage.fallTyp;
+  lage.aska      = malLage.aska;
+  lage.studsar   = malLage.studsar;
+  lage.laggerSig = malLage.laggerSig;
+  lage.valda     = malLage.valda;
+}
+
+/* --- Åskan ---------------------------------------------------------------
+   Återkommande blixt: all konfetti fryser ett ögonblick, skärmen vitnar, och
+   när frysningen släpper sprids bitarna utåt från blixtens mitt. */
+const ASK_FRYS = 130, ASK_MIN = 2600, ASK_MAX = 6000;   // millisekunder
+let askNasta = 0, askFrysTill = 0, askLjus = 0, askX = 0, askY = 0;
+
+function askTick(nu, dt){
+  if(!lage.aska){
+    askNasta = 0; askFrysTill = 0;
+    askLjus = Math.max(0, askLjus - dt * 3);
+    return false;
+  }
+  if(!askNasta) askNasta = nu + 900;
+
+  if(!askFrysTill && nu >= askNasta){
+    askFrysTill = nu + ASK_FRYS;
+    askLjus = 1;
+    askX = innerWidth * (0.2 + Math.random() * 0.6);
+    askY = innerHeight * 0.1;
+  }
+  if(askFrysTill && nu >= askFrysTill){
+    askFrysTill = 0;
+    askNasta = nu + ASK_MIN + Math.random() * (ASK_MAX - ASK_MIN);
+    for(const f of flingor){                        // sprid ut dem
+      const dx = f.x - askX, dy = f.y - askY;
+      const d = Math.hypot(dx, dy) || 1;
+      const kraft = 9 * Math.min(1, 420 / d);
+      f.vx += dx / d * kraft;
+      f.vy += dy / d * kraft - 2;
+      f.snurr += (Math.random() - 0.5) * 0.5;
+    }
+  }
+  askLjus = Math.max(0, askLjus - dt * 2.4);
+  return askFrysTill > 0;
+}
+
+/* Isblått till varm bärnsten, med lite spridning så fältet inte blir platt. */
+const KALL = [150, 205, 255], VARM = [255, 168, 64];
+
+function flingfarg(){
+  const pal = KFARGER[(Math.random() * KFARGER.length) | 0];
+  if(lage.fargVikt < 0.02) return pal.slice();
+  const spridning = (Math.random() - 0.5) * 46;
+  return [0, 1, 2].map(i => {
+    const temp = KALL[i] + (VARM[i] - KALL[i]) * lage.fargTon + spridning;
+    return Math.max(0, Math.min(255, pal[i] + (temp - pal[i]) * lage.fargVikt));
+  });
+}
 
 function kstorlek(){
   const r = Math.min(devicePixelRatio || 1, 2);
@@ -1045,14 +1137,16 @@ addEventListener('resize', kstorlek);
 kstorlek();
 
 function nyFlinga(x, y, vx, vy, skala = 1){
+  const st = skala * lage.storlek;
   return {
     x, y, vx, vy,
-    b: (5 + Math.random() * 7) * skala,
-    h: (7 + Math.random() * 9) * skala,
+    b: (5 + Math.random() * 7) * st,
+    h: (7 + Math.random() * 9) * st * lage.langd,
+    z: Math.random(),                                 // djupled, för dimman
     vinkel: Math.random() * Math.PI * 2,
-    snurr: (Math.random() - 0.5) * 0.4,
+    snurr: (Math.random() - 0.5) * 0.4 * lage.tumlar,
     vagg: Math.random() * Math.PI * 2,
-    farg: KFARGER[(Math.random() * KFARGER.length) | 0],
+    farg: flingfarg(),
     liv: 1,
   };
 }
@@ -1079,15 +1173,23 @@ function kanon(x, y, riktning, antal, kraft){
    tom och allt samlas i ena kanten. */
 function regna(dt){
   if(!regnar) return;
-  regnSkuld += REGN_TAKT * dt;
+  regnSkuld += REGN_TAKT * lage.taktFaktor * dt;
   const b = innerWidth, m = b * 0.25;
   while(regnSkuld >= 1){
     regnSkuld--;
     if(flingor.length >= REGN_TAK) break;
     const x = Math.random() * (b + 2 * m) - m - Math.sign(vindX) * m * 0.6;
-    const f = nyFlinga(x, -20 - Math.random() * 60, 0, 1 + Math.random() * 1.5, 0.78);
-    f.regn = true;
-    flingor.push(f);
+    /* Fuktigt väder får bitarna att fastna i klungor som faller tyngre. */
+    const klungan = lage.klump > 0.05 && Math.random() < lage.klump
+      ? 2 + Math.floor(Math.random() * 3) : 1;
+    for(let n = 0; n < klungan && flingor.length < REGN_TAK; n++){
+      const f = nyFlinga(x + (Math.random() - 0.5) * 14 * lage.klump,
+                         -20 - Math.random() * 60, 0,
+                         (1 + Math.random() * 1.5) * lage.fallFart *
+                           (1 + lage.klump * 0.45), 0.78);
+      f.regn = true;
+      flingor.push(f);
+    }
   }
 }
 
@@ -1110,37 +1212,76 @@ let ksist = 0;
 function ksteg(nu){
   const dt = Math.min(0.05, (nu - ksist) / 1000); ksist = nu;
   const h = innerHeight;
-  regna(dt);
+  glidLage(dt);
+  const fryst = askTick(nu, dt);
+  if(!fryst) regna(dt);
   kctx.clearRect(0, 0, kw, kh);
 
   for(const f of flingor){
-    f.vy += 26 * dt;                                 // gravitation
-    f.vx += vindX * dt;                              // vinden på platsen du landade
-    /* Regnbitarna får kraftigt luftmotstånd i höjdled så de dalar i stället för
-       att störta. Då hinner vinden verka på dem, och det är hela poängen med
-       regnet. Sidledes motstånd lämnas som det är, annars dämpas vinden bort. */
-    f.vx *= 1 - 0.9 * dt;
-    f.vy *= 1 - (f.regn ? 6 : 0.3) * dt;
-    f.vagg += dt * 5;
-    f.x += (f.vx + Math.sin(f.vagg) * 1.4) * dt * 60;
-    f.y += f.vy * dt * 60;
-    f.vinkel += f.snurr;
-    if(f.y > h + 40) f.liv = 0;
+    if(!fryst){                                      // under blixten står allt still
+      f.vy += 26 * dt;                               // gravitation
+      f.vx += vindX * dt;                            // vinden på platsen du landade
+      f.vy += lage.drift * dt * 3;                   // lufttryckets lyft eller sänke
+      /* Regnbitarna får kraftigt luftmotstånd i höjdled så de dalar i stället för
+         att störta. Då hinner vinden verka på dem, och det är hela poängen med
+         regnet. Sidledes motstånd lämnas som det är, annars dämpas vinden bort.
+         Nederbördstypen äger hur hårt det bromsar. */
+      f.vx *= 1 - 0.9 * dt;
+      f.vy *= 1 - (f.regn ? lage.fallDrag : 0.3) * dt;
+      f.vagg += dt * 5;
+      const svang = 1.4 + lage.rastlos * 2.6;        // lågtryck gör dem rastlösa
+      if(!f.vilar){
+        f.x += (f.vx + Math.sin(f.vagg) * svang) * dt * 60;
+        f.y += f.vy * dt * 60;
+        f.vinkel += f.snurr;
+      }
 
+      /* Hagel studsar när det landar, snö lägger sig. */
+      if(lage.studsar && !f.vilar && f.y > h - 5 && f.vy > 0 && (f.studsat || 0) < 3){
+        f.y = h - 5; f.vy *= -0.42; f.vx *= 0.7; f.studsat = (f.studsat || 0) + 1;
+      } else if(lage.laggerSig && !f.vilar && f.y > h - 7){
+        f.vilar = true; f.y = h - 7; f.vy = 0; f.vx = 0; f.snurr = 0;
+      }
+      if(f.vilar){
+        f.vila = (f.vila || 0) + dt;
+        if(f.vila > 6) f.liv = 0;
+      }
+      if(f.y > h + 40) f.liv = 0;
+    }
     if(!f.liv) continue;
+
+    /* Dimman tar de bortre bitarna: ju större z, desto längre bak. */
+    const bak = lage.djup * f.z;
+    const synlig = lage.ljus * (1 - bak * 0.82);
+    if(synlig < 0.02) continue;
+    const krymp = 1 - bak * 0.34;
+
+    /* Klar himmel ger metalliskt blänk när biten vänder sig mot betraktaren. */
+    const vand = Math.cos(f.vagg * 0.7);
+    const blank = lage.glans * Math.pow(Math.abs(vand), 10);
+
+    let [r, g, b] = f.farg;
+    r += lage.varmt * 20; b -= lage.varmt * 20;      // dygnets färgtemperatur
+    r += (255 - r) * blank; g += (255 - g) * blank; b += (255 - b) * blank;
+
     kctx.save();
     kctx.translate(f.x, f.y);
     kctx.rotate(f.vinkel);
     /* Platta till på bredden i takt med rotationen — då ser pappersbiten ut
        att vända sig i luften i stället för att vara en snurrande rektangel. */
-    kctx.scale(Math.cos(f.vagg * 0.7), 1);
-    kctx.fillStyle = f.farg;
+    kctx.scale(vand * krymp, krymp);
+    kctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${synlig})`;
     kctx.fillRect(-f.b / 2, -f.h / 2, f.b, f.h);
     kctx.restore();
   }
   flingor = flingor.filter(f => f.liv);
 
-  if(flingor.length || regnar) requestAnimationFrame(ksteg);
+  if(askLjus > 0.01){                                // blixtens sken
+    kctx.fillStyle = `rgba(226,238,255,${askLjus * 0.42})`;
+    kctx.fillRect(0, 0, innerWidth, innerHeight);
+  }
+
+  if(flingor.length || regnar || askLjus > 0.01) requestAnimationFrame(ksteg);
   else { kloop = false; kctx.clearRect(0, 0, kw, kh); }
 }
 /* --- 10. Radion ----------------------------------------------------------

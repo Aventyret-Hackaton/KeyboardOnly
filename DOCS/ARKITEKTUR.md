@@ -1,9 +1,17 @@
 # Arkitektur
 
-`index.html` är hela appen — ungefär 1 280 rader i en fil, uppdelad i numrerade
-avsnitt. Inget byggsteg, inga beroenden utom MapLibre från CDN.
+Inget byggsteg, inga beroenden utom MapLibre från CDN.
 
-| avsnitt | innehåll |
+| fil | roll |
+|---|---|
+| `index.html` | appen — ungefär 1 420 rader, uppdelad i numrerade avsnitt |
+| `vader.js` | ren logik för väderkonfettin, utan DOM och nätverk, så den går att testa |
+| `test/urval.test.js` | 18 tester, körs med `node --test test/urval.test.js` |
+
+Allt som rör DOM, canvas eller nätverk ligger i `index.html`. Gränsen mot en egen
+fil går vid testbarhet.
+
+| avsnitt i index.html | innehåll |
 |---|---|
 | 1 | Fysisk tangentbordslayout |
 | 1b | Landmask och projektion |
@@ -15,6 +23,7 @@ avsnitt. Inget byggsteg, inga beroenden utom MapLibre från CDN.
 | 7 | Bilden |
 | 8 | Höjd, sol, luft, seismik, arter, musik |
 | 9 | Konfetti |
+| 9b | Väderlägena och åskan |
 | 10 | Radion |
 | 11 | Tiden |
 
@@ -157,6 +166,39 @@ vinden. Det är hela poängen med regnet. Sidledes motstånd lämnas lågt, anna
 dämpas vinden bort.
 
 Mätt med regn plus full salva: 455 partiklar, 8,3 ms per bildruta i median.
+
+### Väderlägena
+
+Utöver vinden visar konfettin de **tre mest talande förhållandena** för platsen.
+`vader.js` rangordnar åtta kandidater, hoppar över dem som inte förekommer och
+tar de tre första. Varje förhållande äger exakt en visuell egenskap, så de kan
+inte krocka:
+
+| förhållande | egenskap | fält ur Open-Meteo |
+|---|---|---|
+| åska | blixt som fryser och sprider | `weather_code` 95/96/99 |
+| nederbörd | fallrörelsen | `precipitation`, typ ur koden |
+| dimma | djuposkärpa | `visibility` < 1 km |
+| temperatur | färg, isblå till bärnsten | `temperature_2m` |
+| molnighet | täthet och blänk | `cloud_cover` |
+| luftfuktighet | klumpning | `relative_humidity_2m` |
+| lufttryck | vertikal drift | `pressure_msl` |
+| dygnstid | ljusstyrka och färgton | `is_day` |
+
+Ett saknat värde räknas som att förhållandet inte förekommer, och nästa i
+ordningen tar platsen. En egenskap vars förhållande inte valdes faller tillbaka
+på `NEUTRALT` — neutral färg är den ursprungliga flerfärgade paletten.
+
+**Ett undantag från ensamrätten:** `taktFaktor` multipliceras i stället för att
+skrivas över. Molnigheten äger tätheten, men duggregn ska vara glest och hagel
+tätt. Utan multiplikationen avgör rangordningen vem som vinner, och eftersom
+molnigheten kommer sist fick duggregn samma täthet som en mulen dag.
+
+Övergångar mellan lägen glider över `LAGE_TAU` sekunder för tal. Färg och
+falltyp byts genom utbyte i stället: varje bit behåller det utseende den föddes
+med, och fältet tonar över när bitarna ersätts.
+
+Tröskelvärdena ligger i `TROSKLAR` högst upp i `vader.js`, skilda från logiken.
 
 ---
 
