@@ -29,6 +29,8 @@
   #marke::after{content:'';display:inline-block;width:1px;height:11px;margin-left:16px;
     background:var(--line);vertical-align:-1px}
   #phase{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+  #beats{margin-left:auto;font-size:13px;letter-spacing:.1em;color:var(--fg);
+    font-variant-numeric:tabular-nums}
 
   /* ---- startskärmen ---- */
   #start{position:absolute;inset:0;z-index:10;display:grid;place-items:center;
@@ -46,6 +48,9 @@
     padding-top:16px;border-top:1px solid var(--line)}
   #start .punkter b{display:block;font-weight:400;font-size:14px;color:var(--fg);
     margin-bottom:7px;letter-spacing:.02em}
+  #start .salj{max-width:620px;margin:0 auto 38px;font-size:11.5px;line-height:1.8;
+    color:var(--dim);padding-top:18px;border-top:1px solid var(--line)}
+  #start .salj b{color:var(--fg);font-weight:400}
   #start .cta{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg);
     animation:andas 2.6s ease-in-out infinite}
   @keyframes andas{0%,100%{opacity:.45}50%{opacity:1}}
@@ -127,6 +132,7 @@
   <div id="marke">TANGENT</div>
   <div id="phase">lägg händerna på tangentbordet</div>
   <div id="coords">—</div>
+  <div id="beats">@—</div>
 </div>
 
 <div id="start">
@@ -142,6 +148,11 @@
       <div><b>Noll inlärningstid</b>Inga kommandon att memorera, inga genvägar att slå upp.
         Lägg händerna på tangentbordet.</div>
     </div>
+
+    <div class="salj"><b>Tiden visas i beats.</b> Swatch Internet Time delar dygnet i
+      1 000 lika delar och har inga tidszoner, vilket gör den till det enda tidsformat
+      som fungerar lika bra överallt du kan hamna. @500 inträffar samtidigt i Reykjavik
+      och i Ulaanbaatar. Lokal tid redovisas som fotnot.</div>
 
     <div class="cta">Lägg händerna på tangentbordet för att börja</div>
     <div class="finstilt">Positionen härleds ur tangenttryckens fysiska tyngdpunkt.
@@ -222,18 +233,52 @@ const KEYS = [
 ];
 
 /* code -> tyngdpunkt i tangentenheter */
-/* Ett laptoptangentbord saknar numeriskt block och navigationsklump, men
-   bokstavsblocket har samma mått. Webbplattformen kan inte berätta vilket
-   tangentbord som sitter i — getLayoutMap ger bara vilket tecken varje fysisk
-   tangent ger, aldrig geometrin — så valet får ske i adressen: ?kb=laptop */
-const LAYOUT = new URLSearchParams(location.search).get('kb') === 'laptop' ? 'laptop' : 'full';
-const ALLA_KEYS = KEYS;
-const AKTIVA_KEYS = LAYOUT === 'laptop'
-  ? ALLA_KEYS.filter(([c, x, y, w]) => x + w <= 15.3)
-  : ALLA_KEYS;
-const KB_BREDD = LAYOUT === 'laptop' ? 15 : KB_W;
+/* MacBook, svensk ISO: [code, x, y, bredd, höjd]. Det är inte en avkapad
+   fullstor tabell — bottenraden har andra bredder, piltangenterna ligger inne i
+   bokstavsblocket med halvhöga upp och ner, funktionsraden är halvhög, och ISO
+   lägger en extra tangent vid vänster shift (IntlBackslash) samtidigt som
+   returtangenten blir två rader hög. Bredden är 15 tangentenheter. */
+const KEYS_LAPTOP = [
+  ['Escape',0,0,1.5,.5],
+  ...Array.from({length:12}, (_, i) => [`F${i+1}`, 1.5 + i, 0, 1, .5]),
 
-const POS = new Map(AKTIVA_KEYS.map(([c,x,y,w]) => [c, {x: x + w/2, y: y + 0.5}]));
+  ['Backquote',0,1,1],['Digit1',1,1,1],['Digit2',2,1,1],['Digit3',3,1,1],
+  ['Digit4',4,1,1],['Digit5',5,1,1],['Digit6',6,1,1],['Digit7',7,1,1],
+  ['Digit8',8,1,1],['Digit9',9,1,1],['Digit0',10,1,1],['Minus',11,1,1],
+  ['Equal',12,1,1],['Backspace',13,1,2],
+
+  ['Tab',0,2,1.5],['KeyQ',1.5,2,1],['KeyW',2.5,2,1],['KeyE',3.5,2,1],
+  ['KeyR',4.5,2,1],['KeyT',5.5,2,1],['KeyY',6.5,2,1],['KeyU',7.5,2,1],
+  ['KeyI',8.5,2,1],['KeyO',9.5,2,1],['KeyP',10.5,2,1],
+  ['BracketLeft',11.5,2,1],['BracketRight',12.5,2,1],['Enter',13.75,2,1.25,2],
+
+  ['CapsLock',0,3,1.75],['KeyA',1.75,3,1],['KeyS',2.75,3,1],['KeyD',3.75,3,1],
+  ['KeyF',4.75,3,1],['KeyG',5.75,3,1],['KeyH',6.75,3,1],['KeyJ',7.75,3,1],
+  ['KeyK',8.75,3,1],['KeyL',9.75,3,1],['Semicolon',10.75,3,1],['Quote',11.75,3,1],
+  ['Backslash',12.75,3,1],
+
+  ['ShiftLeft',0,4,1.25],['IntlBackslash',1.25,4,1],['KeyZ',2.25,4,1],['KeyX',3.25,4,1],
+  ['KeyC',4.25,4,1],['KeyV',5.25,4,1],['KeyB',6.25,4,1],['KeyN',7.25,4,1],
+  ['KeyM',8.25,4,1],['Comma',9.25,4,1],['Period',10.25,4,1],['Slash',11.25,4,1],
+  ['ShiftRight',12.25,4,2.75],
+
+  ['Fn',0,5,1],['ControlLeft',1,5,1],['AltLeft',2,5,1],['MetaLeft',3,5,1.25],
+  ['Space',4.25,5,5],['MetaRight',9.25,5,1.25],['AltRight',10.5,5,1],
+  ['ArrowLeft',11.5,5,1],['ArrowUp',12.5,5,1,.5],['ArrowDown',12.5,5.5,1,.5],
+  ['ArrowRight',13.5,5,1],
+];
+
+/* Laptop är standard — det är så den kommer användas. ?kb=full ger det stora
+   bordet. Webbplattformen kan inte berätta vilket tangentbord som sitter i:
+   getLayoutMap ger bara vilket tecken varje fysisk tangent ger, aldrig
+   geometrin eller om det finns ett numeriskt block. */
+const LAYOUT = new URLSearchParams(location.search).get('kb') === 'full' ? 'full' : 'laptop';
+const AKTIVA_KEYS = LAYOUT === 'full' ? KEYS : KEYS_LAPTOP;
+const KB_BREDD = LAYOUT === 'full' ? KB_W : 15;
+const KB_HOJD = LAYOUT === 'full' ? KB_H : 6.5;
+
+const POS = new Map(AKTIVA_KEYS.map(([c, x, y, w, h = 1]) =>
+  [c, {x: x + w / 2, y: y + h / 2}]));
 
 /* --- 1b. Landmasken ------------------------------------------------------
    Två tredjedelar av jordklotet är hav, och ett tangentbord där de flesta
@@ -328,8 +373,8 @@ const FN_ROW_WORKS = false;
 const ANVANDBARA = AKTIVA_KEYS.filter(([c, x, y]) => FN_ROW_WORKS || y > 0);
 const X0 = Math.min(...ANVANDBARA.map(([c, x, y, w]) => x + w / 2));
 const X1 = Math.max(...ANVANDBARA.map(([c, x, y, w]) => x + w / 2));
-const Y0 = Math.min(...ANVANDBARA.map(([c, x, y]) => y + 0.5));
-const Y1 = Math.max(...ANVANDBARA.map(([c, x, y]) => y + 0.5));
+const Y0 = Math.min(...ANVANDBARA.map(([c, x, y, w, h = 1]) => y + h / 2));
+const Y1 = Math.max(...ANVANDBARA.map(([c, x, y, w, h = 1]) => y + h / 2));
 const clamp01 = t => Math.max(0, Math.min(0.999999, t));
 
 /* Trimma bort fördelningarnas yttersta svansar, annars är översta raden Nordpolen
@@ -421,17 +466,18 @@ const kb = document.getElementById('kb');
 const centroidDot = document.getElementById('centroid');
 const keyEls = new Map();
 kb.style.width = `calc(${KB_BREDD} * var(--u))`;
+kb.style.height = `calc(${KB_HOJD} * var(--u))`;
 const label = c => c
   .replace(/^Key|^Digit/,'').replace(/^Numpad/,'#').replace(/^Arrow/,'')
   .replace('Left','L').replace('Right','R').slice(0,5);
 
-for(const [code,x,y,w] of AKTIVA_KEYS){
+for(const [code, x, y, w, h = 1] of AKTIVA_KEYS){
   const el = document.createElement('div');
   el.className = 'k';
   el.style.left   = `calc(${x} * var(--u) + 2px)`;
   el.style.top    = `calc(${y} * var(--u) + 2px)`;
   el.style.width  = `calc(${w} * var(--u) - 4px)`;
-  el.style.height = 'calc(1 * var(--u) - 4px)';
+  el.style.height = `calc(${h} * var(--u) - 4px)`;
   el.textContent = label(code);
   if(!FN_ROW_WORKS && /^F\d+$/.test(code)) el.style.opacity = '.22';   // äts av macOS
   kb.appendChild(el);
@@ -614,7 +660,8 @@ async function lock(){
     ['Närmaste artikel',  wiki,             '',               true],
     ['Närmaste art',      v('k-art'),       ''],
     ['Seismik',           v('k-skalv'),     ''],
-    ['Dygnet',            v('k-sol'),       'lokal tid ' + wx.time, true],
+    ['Tid',               '<span id="k-beats">@—</span>',
+                          `lokal tid ${wx.time} · <span id="k-sol">…</span>`, true],
   ].map(([etikett, varde, under, bred]) =>
     `<div class="kort${bred ? ' bred' : ''}">` +
       `<div class="etikett">${etikett}</div>` +
@@ -900,7 +947,7 @@ function extraRader(lat, lon, kod, round){
   /* Soluppgång och solnedgång på plats */
   hamta(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
         '&daily=sunrise,sunset&timezone=auto&forecast_days=1')
-    .then(j => fyll('k-sol', `${j.daily.sunrise[0].slice(11)} – ${j.daily.sunset[0].slice(11)}`, round))
+    .then(j => fyll('k-sol', `sol ${j.daily.sunrise[0].slice(11)}–${j.daily.sunset[0].slice(11)}`, round))
     .catch(() => fyll('k-sol', '—', round));
 
   /* Luftkvalitet */
@@ -1112,6 +1159,22 @@ const RADIO_VOLYM = 0.65;
 
 let ljud = null, tyst = false, tonare = null;
 
+/* Varje skapad spelare hamnar här. Tidigare spårades bara den senaste, så en
+   ström som hann starta precis innan nästa svep blev föräldralös och fortsatte
+   spela utan att något längre pekade på den. */
+const spelare = new Set();
+
+/* src = '' löser upp mot sidans egen adress, så elementet börjar ladda
+   index.html som media i stället för att släppa strömmen. removeAttribute
+   följt av load() är det sätt som faktiskt river ner resursen. */
+function river(a){
+  try{
+    a.pause();
+    a.removeAttribute('src');
+    a.load();
+  }catch{}
+}
+
 async function sokStation(lat, lon){
   for(const avstand of RADIO_RINGAR){
     for(const bas of RADIO_SPEGLAR){
@@ -1138,8 +1201,15 @@ async function sokStation(lat, lon){
 
 function stoppaRadio(){
   clearInterval(tonare); tonare = null;
-  if(ljud){ try{ ljud.pause(); ljud.src = ''; }catch{} ljud = null; }
+  for(const a of spelare) river(a);
+  spelare.clear();
+  ljud = null;
 }
+
+/* Säkerhetsrem: stäng fliken, ladda om eller navigera bort och strömmen dör
+   med sidan i stället för att leva vidare. */
+addEventListener('pagehide', stoppaRadio);
+addEventListener('beforeunload', stoppaRadio);
 
 function vaxlaTyst(){
   tyst = !tyst;
@@ -1158,14 +1228,19 @@ async function startaRadio(lat, lon, round){
   fyll('k-radio', `${st.name.trim().slice(0, 42)} · ${km(traff.d)} bort`, round);
 
   ljud = new Audio(st.url_resolved);
+  spelare.add(ljud);
   ljud.volume = 0;
   ljud.addEventListener('error', () => {
     if(round === roundId) fyll('k-radio', `${st.name.trim().slice(0, 42)} · strömmen svarar inte`, round);
   }, {once: true});
 
-  try{ await ljud.play(); }
+  const mitt = ljud;
+  try{ await mitt.play(); }
   catch{ return; }                                   // webbläsaren sa nej, kortet står kvar
-  if(round !== roundId){ stoppaRadio(); return; }
+  if(round !== roundId || ljud !== mitt){            // ett nytt svep hann före
+    river(mitt); spelare.delete(mitt);
+    return;
+  }
 
   /* Tona upp över ett par sekunder. Att kastas in mitt i en reklampaus på full
      volym är inte den upplevelse vi är ute efter. */
@@ -1177,6 +1252,31 @@ async function startaRadio(lat, lon, round){
     if(v >= 1){ clearInterval(tonare); tonare = null; }
   }, 60);
 }
+/* --- 11. Tiden -----------------------------------------------------------
+   Swatch Internet Time, 1998. Dygnet delas i 1 000 beats om 86,4 sekunder,
+   räknat från midnatt i Biel Mean Time — alltså UTC+1, utan sommartid, året om.
+
+   Det finns inga tidszoner. @500 inträffar i samma ögonblick överallt på
+   jorden. För en tjänst vars hela uppgift är att kasta dig till en slumpmässig
+   punkt på klotet är det inte en kuriositet utan det enda tidsformat som inte
+   behöver räknas om varje gång du landar. Lokal tid står kvar som fotnot.
+   ------------------------------------------------------------------------ */
+const MS_PER_BEAT = 86400;                      // 86,4 sekunder
+
+function beats(d = new Date()){
+  const bmt = d.getTime() + 3600000;            // BMT = UTC+1, aldrig sommartid
+  return Math.floor(((bmt % 86400000) + 86400000) % 86400000 / MS_PER_BEAT);
+}
+
+const visaBeats = () => '@' + String(beats()).padStart(3, '0');
+
+function tickTid(){
+  const t = visaBeats();
+  const h = $('beats'); if(h) h.textContent = t;
+  const k = $('k-beats'); if(k) k.textContent = t;
+}
+tickTid();
+setInterval(tickTid, 864);
 </script>
 </body>
 </html>
