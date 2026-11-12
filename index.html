@@ -1298,6 +1298,15 @@ const RADIO_SPEGLAR = ['https://de1.api.radio-browser.info',
 const RADIO_RINGAR = [150, 500, 1500];               // km
 const RADIO_VOLYM = 0.65;
 
+/* En sida över https blockerar strömmar över http som blandat innehåll, tyst
+   och utan felmeddelande. Ungefär 15 procent av stationerna i radio-browser
+   sänder över http (mätt på 400 stycken), så utan filtret vore var sjunde
+   landning stum på GitHub Pages. Lokalt över http spelar de fint, och då
+   vill vi ha dem kvar — filtret slår bara till när det behövs. */
+const KRAVER_HTTPS = location.protocol === 'https:';
+const sandsOver = st => !KRAVER_HTTPS ||
+  (st.url_resolved || '').toLowerCase().startsWith('https:');
+
 let ljud = null, tyst = false, tonare = null;
 
 /* Varje skapad spelare hamnar här. Tidigare spårades bara den senaste, så en
@@ -1321,14 +1330,14 @@ async function sokStation(lat, lon){
     for(const bas of RADIO_SPEGLAR){
       let lista;
       try{
-        lista = await hamta(`${bas}/json/stations/search?limit=12&hidebroken=true` +
+        lista = await hamta(`${bas}/json/stations/search?limit=16&hidebroken=true` +
           `&has_geo_info=true&geo_lat=${lat}&geo_long=${lon}` +
           `&geo_distance=${avstand * 1000}&order=clickcount&reverse=true`, 10000);
       }catch{ continue; }                            // spegeln svarade inte, prova nästa
       if(!Array.isArray(lista)) continue;
       let bast = null;
       for(const st of lista){
-        if(!st.url_resolved) continue;
+        if(!st.url_resolved || !sandsOver(st)) continue;
         const d = st.geo_lat != null
           ? haversine(lat, lon, st.geo_lat, st.geo_long) : avstand * 1000;
         if(!bast || d < bast.d) bast = {d, st};       // närmast slår populärast
