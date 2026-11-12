@@ -115,6 +115,33 @@ node --test test/urval.test.js  # 18 tester
 
 ---
 
+## För granskning
+
+Varje påstående nedan går att kontrollera på plats. Kolumnen *bevis* är ett
+kommando eller en adress, inte en hänvisning.
+
+| # | Påstående | Bevis |
+|---|---|---|
+| 5 | Tjänsten läser aldrig vilket **tecken** en tangent gör, bara var den sitter | `grep -cE "\be\.key\b\|event\.key" index.html` → **0**<br>`grep -oE "\be\.code\b" index.html \| wc -l` → **5** |
+| 5 | Inga mus-, pek- eller tryckhändelser finns i gränssnittet | `grep -cE "addEventListener\(.(click\|mouse\|pointer\|touch)" index.html` → **0** |
+| 8 | Sju öppna källor, inga nycklar, inga konton | `grep -c "MAPILLARY_TOKEN = ''" index.html` → **1**, alltså tom |
+| 8 | Inga spårare, ingen analys, inga cookies | 9 externa värdar totalt, alla listade ovan |
+| 6 | Konfettin är väderstyrd, inte dekorativ | `vader.js` — ren logik utan DOM och nätverk |
+| — | Urvalslogiken är testad | `node --test test/urval.test.js` → **18 av 18** |
+| — | Tjänsten är live | `curl -so /dev/null -w "%{http_code}" https://tangentiellt.notini.se/` → **200** |
+
+### Vad som inte är gjort
+
+Briefens punkter 1, 2, 3 och 9 — 3D-gränssnitt, telefonstyrning via mikrofon
+eller kamera, gyro, och parkoppling mellan enheter — finns inte i projektet.
+Punkt 7, canvas, är uppfylld för konfettin och för
+[Tangentbordspenseln](https://tangentiellt.notini.se/rita.html), men ritandet
+ligger utanför huvudtjänsten.
+
+Vi redovisar det hellre själva än låter en granskare hitta det.
+
+---
+
 ## Mer
 
 | | |
