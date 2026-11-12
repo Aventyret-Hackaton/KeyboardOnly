@@ -127,6 +127,11 @@ varje källa fyller sin egen ruta när den svarar.
 | musik | MusicBrainz |
 | radio | radio-browser.info |
 
+Radiostationernas strömmar är den enda källan vars protokoll vi inte styr.
+Ungefär 15 procent sänder över http, vilket en https-sida blockerar tyst som
+blandat innehåll. `KRAVER_HTTPS` filtrerar bort dem — men bara när sidan själv
+körs över https, så lokal utveckling behåller full täckning.
+
 ### Ringmönstret
 
 Tre av källorna — Commons, Wikipedia och radio — har en radiegräns på 10 km

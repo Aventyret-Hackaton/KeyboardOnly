@@ -51,6 +51,22 @@ Inga beroenden — node:test räcker.
 | `Cmd+M` | tystar radion |
 | `Cmd+R` | laddar om |
 
+### Publicera på webben
+
+Appen är statisk och har inget byggsteg, så GitHub Pages räcker:
+**Settings → Pages → Deploy from a branch → `main` / `(root)`**. Alla sökvägar
+är relativa, så den fungerar även på en underkatalog.
+
+Två saker att veta innan:
+
+- **Radiostationer över http filtreras bort** på en https-sida, eftersom
+  webbläsaren annars blockerar dem tyst. Ungefär 15 procent av stationerna
+  berörs. Filtret sitter i `sokStation()` och slår bara till när sidan själv
+  körs över https.
+- **Nominatims villkor** kräver en identifierbar klient och högst ett anrop i
+  sekunden. En webbläsare kan inte sätta User-Agent, så en publik sida som får
+  trafik riskerar att blockeras. För en demo du själv kör är det oproblematiskt.
+
 ---
 
 ## Filkarta
