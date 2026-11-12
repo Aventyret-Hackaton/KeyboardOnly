@@ -117,18 +117,33 @@ node --test test/urval.test.js  # 18 tester
 
 ## För granskning
 
-Varje påstående nedan går att kontrollera på plats. Kolumnen *bevis* är ett
-kommando eller en adress, inte en hänvisning.
+Varje påstående nedan går att kontrollera på plats. Kör kommandona i repots rot.
 
-| # | Påstående | Bevis |
+```bash
+# 5 · läser aldrig vilket tecken en tangent gör, bara var den sitter
+grep -cE "\be\.key\b|event\.key" index.html                            # → 0
+grep -oE "\be\.code\b" index.html | wc -l                              # → 5
+
+# 5 · inga mus-, pek- eller tryckhändelser finns i gränssnittet
+grep -cE "addEventListener\(.(click|mouse|pointer|touch)" index.html   # → 0
+
+# 8 · inga API-nycklar i koden
+grep -c "MAPILLARY_TOKEN = ''" index.html                              # → 1, tom sträng
+
+# 6 · konfettins väderlogik är testad, inte påstådd
+node --test test/urval.test.js                                         # → 18 av 18
+
+# tjänsten är live
+curl -so /dev/null -w "%{http_code}\n" https://tangentiellt.notini.se/ # → 200
+```
+
+| # | Påstående | Var |
 |---|---|---|
-| 5 | Tjänsten läser aldrig vilket **tecken** en tangent gör, bara var den sitter | `grep -cE "\be\.key\b\|event\.key" index.html` → **0**<br>`grep -oE "\be\.code\b" index.html \| wc -l` → **5** |
-| 5 | Inga mus-, pek- eller tryckhändelser finns i gränssnittet | `grep -cE "addEventListener\(.(click\|mouse\|pointer\|touch)" index.html` → **0** |
-| 8 | Sju öppna källor, inga nycklar, inga konton | `grep -c "MAPILLARY_TOKEN = ''" index.html` → **1**, alltså tom |
-| 8 | Inga spårare, ingen analys, inga cookies | 9 externa värdar totalt, alla listade ovan |
-| 6 | Konfettin är väderstyrd, inte dekorativ | `vader.js` — ren logik utan DOM och nätverk |
-| — | Urvalslogiken är testad | `node --test test/urval.test.js` → **18 av 18** |
-| — | Tjänsten är live | `curl -so /dev/null -w "%{http_code}" https://tangentiellt.notini.se/` → **200** |
+| 5 | Bara tangentbord, aldrig mus | hela `index.html`, se kommandona ovan |
+| 8 | Sju öppna källor, inga nycklar, inga konton, inga spårare | nio externa värdar totalt, alla listade ovan |
+| 4 | Koordinat, karta, markör och osäkerhetscirkel per nedslag | avsnitt 2 i `index.html` |
+| 6 | Konfettin är en avläsning av vädret, inte dekoration | `vader.js`, 192 rader ren logik utan DOM |
+| 7 | Canvas, och användaren ritar själv | `#konfetti` samt [rita.html](https://tangentiellt.notini.se/rita.html) |
 
 ### Vad som inte är gjort
 
