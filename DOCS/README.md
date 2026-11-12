@@ -1,4 +1,4 @@
-# Tangent
+# Tangentiellt
 
 *Precisionspositionering utan pekdon.*
 
@@ -59,7 +59,7 @@ Inga beroenden — node:test räcker.
 
 | fil | roll |
 |---|---|
-| `index.html` | **Tangent.** Allt som rör DOM, canvas och nätverk. Landmasken ligger inbakad som base64, så den behöver inga lokala datafiler. |
+| `index.html` | **Tangentiellt.** Allt som rör DOM, canvas och nätverk. Landmasken ligger inbakad som base64, så den behöver inga lokala datafiler. |
 | `vader.js` | Ren logik för väderkonfettin — vilka tre förhållanden som visas och hur de ser ut. Utan DOM och nätverk, så den går att testa. |
 | `test/urval.test.js` | 18 tester för urvalslogiken. |
 | `index-utan-bild.html` | Säkerhetskopia från innan bildpanelen byggdes. Kan tas bort nu när git finns. |
@@ -78,7 +78,7 @@ Inget byggsteg. `vader.js` laddas som ett vanligt `<script src>`.
 
 ### Vilande experiment
 
-Tre spår vi provade och lämnade. De fungerar, men ingår inte i Tangent.
+Tre spår vi provade och lämnade. De fungerar, men ingår inte i Tangentiellt.
 
 | fil | vad det är |
 |---|---|

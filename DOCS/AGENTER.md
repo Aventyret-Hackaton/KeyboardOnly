@@ -166,7 +166,7 @@ Mät, gissa inte. Det som fungerat bra:
 ## Vilande filer
 
 `rita.html`, `doodle.html` och `spel.html` är avslutade experiment. De fungerar
-men ingår inte i Tangent, och de har en äldre tangentbordstabell utan
+men ingår inte i Tangentiellt, och de har en äldre tangentbordstabell utan
 MacBook-stöd.
 
 **Uppdatera dem inte oombedd.** De ligger kvar för att vi kanske återvänder till

@@ -5,7 +5,7 @@
 > Vi fick bara använda tangentbordet. Så vi slutade använda det som ett
 > tangentbord.
 >
-> Tangent bryr sig inte om vilka tecken tangenterna gör. Den bryr sig om *var de
+> Tangentiellt bryr sig inte om vilka tecken tangenterna gör. Den bryr sig om *var de
 > sitter*. Lägg handen på tangentbordet, så blir handens tyngdpunkt en punkt på
 > jorden — och vi berättar allt vi kan hitta om den punkten.
 
