@@ -49,14 +49,11 @@
     padding-top:16px;border-top:1px solid var(--line)}
   #start .punkter b{display:block;font-weight:400;font-size:14px;color:var(--fg);
     margin-bottom:7px;letter-spacing:.02em}
-  #start .salj{max-width:620px;margin:0 auto 38px;font-size:11.5px;line-height:1.8;
-    color:var(--dim);padding-top:18px;border-top:1px solid var(--line)}
-  #start .salj b{color:var(--fg);font-weight:400}
   #start .cta{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg);
     animation:andas 2.6s ease-in-out infinite}
   @keyframes andas{0%,100%{opacity:.45}50%{opacity:1}}
-  #start .finstilt{margin-top:26px;font-size:9.5px;line-height:1.7;color:#49525f;
-    max-width:460px;margin-left:auto;margin-right:auto}
+  #start .finstilt{margin-top:28px;font-size:13px;line-height:1.7;color:var(--dim);
+    max-width:520px;margin-left:auto;margin-right:auto}
   @media (max-width:720px){
     #start .punkter{grid-template-columns:1fr;gap:18px;margin:34px 0 30px}
   }
@@ -70,11 +67,12 @@
 
   /* ---- tangentbords-HUD ---- */
   #kb{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:12;
-    --u:26px;width:calc(22.5*var(--u));height:calc(6.5*var(--u));
+    --u:min(31.2px, calc((100vw - 48px) / 22.5));  /* 20 % större än 26 px, men aldrig bredare än skärmen */
+    width:calc(22.5*var(--u));height:calc(6.5*var(--u));
     background:rgba(10,12,16,.72);border:1px solid var(--line);border-radius:10px;
     backdrop-filter:blur(12px);pointer-events:none}
   .k{position:absolute;border:1px solid var(--line);border-radius:3px;
-    display:grid;place-items:center;font-size:8px;color:#3d4756;overflow:hidden}
+    display:grid;place-items:center;font-size:9.5px;color:#3d4756;overflow:hidden}
   .k.hit{animation:flash .55s ease-out}
   @keyframes flash{
     0%{background:var(--accent);color:#0a0c10;border-color:var(--accent);box-shadow:0 0 14px var(--accent)}
@@ -161,7 +159,7 @@
   #r-foto .realia:has(img) .text{-webkit-line-clamp:2}
 
   /* Hur man tar sig vidare hör till tangentbordet, så det står vid det. */
-  #ledtrad{position:absolute;left:50%;bottom:146px;transform:translateX(-50%);
+  #ledtrad{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);
     width:min(440px, calc(100vw - 48px));padding:12px 16px;text-align:center;
     background:rgba(10,12,16,.88);border:1px solid var(--line);border-radius:6px;
     font-size:14px;line-height:1.5;color:var(--fg)}
@@ -174,9 +172,12 @@
     .ledtrad-inne{display:block}
   }
 
-  /* Medan domen visas krymper tangentbordet och lämnar plats åt panelerna. */
-  #kb{transition:transform .5s ease, opacity .5s ease;transform-origin:50% 100%}
-  body:has(#verdict.on) #kb{transform:translateX(-50%) scale(.6);opacity:.55}
+  /* Tangentbordet syns när du skriver, instruktionen när du läser. Aldrig
+     båda på en gång: medan domen visas glider tangentbordet undan och
+     instruktionen tar dess plats. */
+  #kb{transition:transform .45s ease, opacity .45s ease, visibility 0s}
+  body:has(#verdict.on) #kb{transform:translate(-50%, 40px);opacity:0;visibility:hidden;
+    transition:transform .45s ease, opacity .45s ease, visibility 0s .45s}
 </style>
 </head>
 <body>
@@ -203,11 +204,6 @@
       <div><b>Noll inlärningstid</b>Inga kommandon att memorera, inga genvägar att slå upp.
         Lägg händerna på tangentbordet.</div>
     </div>
-
-    <div class="salj"><b>Tiden visas i beats.</b> Swatch Internet Time delar dygnet i
-      1 000 lika delar och har inga tidszoner, vilket gör den till det enda tidsformat
-      som fungerar lika bra överallt du kan hamna. @500 inträffar samtidigt i Reykjavik
-      och i Ulaanbaatar.</div>
 
     <div class="cta">Lägg händerna på tangentbordet för att börja</div>
     <div class="finstilt">Positionen härleds ur tangenttryckens fysiska tyngdpunkt.
