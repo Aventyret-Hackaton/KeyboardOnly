@@ -92,9 +92,9 @@
   .panel{position:absolute;top:84px;bottom:24px;overflow:hidden;padding:26px 28px;
     background:rgba(10,12,16,.93);border:1px solid var(--line);border-radius:6px;
     backdrop-filter:blur(16px)}
-  /* Vänsterpanelen sluter sig kring innehållet; högerpanelen tar hela höjden. */
+  /* Båda panelerna sluter sig kring innehållet, men aldrig längre än skärmen. */
   #lage{left:24px;bottom:auto;max-height:calc(100vh - 108px);width:clamp(340px, 29vw, 420px);border-left:3px solid var(--accent)}
-  #vetande{right:24px;width:clamp(340px, 30vw, 440px)}
+  #vetande{right:24px;bottom:auto;max-height:calc(100vh - 108px);width:clamp(340px, 30vw, 440px)}
 
   .etikett{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#7b8794}
 
